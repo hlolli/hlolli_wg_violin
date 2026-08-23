@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "holm_valimaki_2000_table1",
+  "units": {
+    "frequency": "Hz",
+    "bandwidth": "Hz",
+    "magnitude": "dB"
+  },
+  "gain_normalization": "10 ** ((magnitude_db - row_maximum_db) / 20)",
+  "rows": {
+    "generic": {
+      "modes": [
+        { "frequency_hz": 265.0, "bandwidth_hz": 15.0, "magnitude_db": 33.0 },
+        { "frequency_hz": 395.0, "bandwidth_hz": 25.0, "magnitude_db": 26.0 },
+        { "frequency_hz": 430.0, "bandwidth_hz": 20.0, "magnitude_db": 29.0 },
+        { "frequency_hz": 550.0, "bandwidth_hz": 30.0, "magnitude_db": 34.0 },
+        { "frequency_hz": 665.0, "bandwidth_hz": 30.0, "magnitude_db": 37.0 }
+      ]
+    }
+  },
+  "profile_targets": [
+    {
+      "profile_id": "generic_violin",
+      "row": "generic",
+      "gain_decimal_places": 4
+    }
+  ]
+}

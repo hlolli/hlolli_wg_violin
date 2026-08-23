@@ -1,0 +1,46 @@
+if(NOT DEFINED START_BAR)
+  set(START_BAR 1)
+endif()
+if(NOT DEFINED VIBRATO_LEVEL)
+  set(VIBRATO_LEVEL 1)
+endif()
+if(NOT DEFINED DISTANCE_METERS)
+  set(DISTANCE_METERS 2.5)
+endif()
+if(DEFINED OUTPUT AND NOT OUTPUT STREQUAL "" AND NOT IS_ABSOLUTE "${OUTPUT}")
+  message(FATAL_ERROR "OUTPUT must be an absolute path")
+endif()
+
+set(_build_command
+    "@CMAKE_COMMAND@" --build "@CMAKE_CURRENT_BINARY_DIR@"
+    --target hlolli_wg_violin)
+if(NOT "$<CONFIG>" STREQUAL "")
+  list(APPEND _build_command --config "$<CONFIG>")
+endif()
+execute_process(COMMAND ${_build_command} RESULT_VARIABLE _build_result)
+if(NOT _build_result EQUAL 0)
+  message(FATAL_ERROR "Could not build hlolli_wg_violin")
+endif()
+
+set(_command
+    "@Python3_EXECUTABLE@" -B
+    "@CMAKE_CURRENT_SOURCE_DIR@/tools/play_bach_chaconne.py"
+    --csound "@CSOUND_EXECUTABLE@"
+    --module "$<TARGET_FILE:hlolli_wg_violin>"
+    --csd "@CMAKE_CURRENT_SOURCE_DIR@/examples/bach_chaconne.csd"
+    --score "@CMAKE_CURRENT_SOURCE_DIR@/examples/bach_chaconne_score.inc"
+    --performance
+    "@CMAKE_CURRENT_SOURCE_DIR@/examples/bach_chaconne_performance.inc"
+    --start-bar "${START_BAR}"
+    --vibrato-level "${VIBRATO_LEVEL}"
+    --distance-meters "${DISTANCE_METERS}")
+if(DEFINED OUTPUT AND NOT OUTPUT STREQUAL "")
+  list(APPEND _command --output "${OUTPUT}")
+endif()
+execute_process(
+  COMMAND ${_command}
+  WORKING_DIRECTORY "@CMAKE_CURRENT_SOURCE_DIR@"
+  RESULT_VARIABLE _play_result)
+if(NOT _play_result EQUAL 0)
+  message(FATAL_ERROR "Chaconne playback failed")
+endif()

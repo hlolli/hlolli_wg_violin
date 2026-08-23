@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "workbench_base_revision": "f2e1b1ad2faef3af10adf7c907a7f5a1ae748f73",
+  "browser_csound_revision": "d1461b1799caaede4a71f83af9f65adbd1488b2a",
+  "canonical_source_sha256": "43806baa67cce7bd3427200b85273f6ee1dd7da08026dc4fecf40d0175727283",
+  "canonical_source_bytes": 324347,
+  "workbench_demo_source_limit_bytes": 393216,
+  "workbench_demo_plugin_wasm_bytes": 126283,
+  "prepared_source_sha256": "8005cd5b4f0b14fe78a590752891ad355200b3888f35c6bea22b6c82b1344038",
+  "prepared_source_bytes": 211596,
+  "prepared_source_limit_bytes": 262144,
+  "prepared_plugin_wasm_bytes": 126235,
+  "plugin_wasm_limit_bytes": 4194304,
+  "performed_blocks": 1501
+}

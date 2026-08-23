@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "default_profile": "generic_violin",
+  "profiles": [
+    "generic_violin.json"
+  ]
+}

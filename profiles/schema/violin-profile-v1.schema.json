@@ -1,0 +1,859 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/hlolli/hlolli_wg_violin/main/profiles/schema/violin-profile-v1.schema.json",
+  "title": "hlolli_wg_violin profile source, version 1",
+  "description": "Build-time source data for one immutable violin profile.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "id",
+    "display_name",
+    "strings",
+    "bow",
+    "gestures",
+    "release_t60_seconds",
+    "harmonics",
+    "exciters",
+    "coupling",
+    "body"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "schema/violin-profile-v1.schema.json"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "pattern": "^[ -~]+$"
+    },
+    "strings": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/string"
+      }
+    },
+    "bow": {
+      "$ref": "#/$defs/bow"
+    },
+    "gestures": {
+      "$ref": "#/$defs/gestures"
+    },
+    "release_t60_seconds": {
+      "$ref": "#/$defs/releaseT60"
+    },
+    "harmonics": {
+      "$ref": "#/$defs/harmonics"
+    },
+    "exciters": {
+      "$ref": "#/$defs/exciters"
+    },
+    "coupling": {
+      "$ref": "#/$defs/coupling"
+    },
+    "body": {
+      "$ref": "#/$defs/body"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+    },
+    "seconds": {
+      "type": "number",
+      "minimum": 0.0001,
+      "maximum": 1.0
+    },
+    "shape": {
+      "type": "number",
+      "minimum": -2.0,
+      "maximum": 2.0
+    },
+    "string": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "characteristic_impedance_kg_per_second",
+        "loss_time_constant_seconds",
+        "nut_cutoff_hz",
+        "bridge_cutoff_hz",
+        "nut_loss_fraction"
+      ],
+      "properties": {
+        "characteristic_impedance_kg_per_second": {
+          "type": "number",
+          "minimum": 0.02,
+          "maximum": 4.0
+        },
+        "loss_time_constant_seconds": {
+          "type": "number",
+          "minimum": 0.02,
+          "maximum": 5.0
+        },
+        "nut_cutoff_hz": {
+          "type": "number",
+          "minimum": 100.0,
+          "maximum": 30000.0
+        },
+        "bridge_cutoff_hz": {
+          "type": "number",
+          "minimum": 100.0,
+          "maximum": 30000.0
+        },
+        "nut_loss_fraction": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "friction": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator also requires floor_mu + slow_gain + fast_gain to be no more than 2.5.",
+      "required": [
+        "floor_mu",
+        "slow_gain",
+        "slow_speed",
+        "fast_gain",
+        "fast_speed"
+      ],
+      "properties": {
+        "floor_mu": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 2.5
+        },
+        "slow_gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.5
+        },
+        "slow_speed": {
+          "type": "number",
+          "minimum": 0.00001,
+          "maximum": 2.0
+        },
+        "fast_gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.5
+        },
+        "fast_speed": {
+          "type": "number",
+          "minimum": 0.00001,
+          "maximum": 2.0
+        }
+      }
+    },
+    "forceMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator requires control_low below control_high.",
+      "required": [
+        "mu_drop_floor",
+        "minimum_divisor",
+        "control_low",
+        "control_high",
+        "normal_max_scale",
+        "extreme_max_scale"
+      ],
+      "properties": {
+        "mu_drop_floor": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 1.2
+        },
+        "minimum_divisor": {
+          "type": "number",
+          "minimum": 5.0,
+          "maximum": 500.0
+        },
+        "control_low": {
+          "type": "number",
+          "minimum": 0.01,
+          "exclusiveMaximum": 0.5
+        },
+        "control_high": {
+          "type": "number",
+          "exclusiveMinimum": 0.5,
+          "maximum": 0.99
+        },
+        "normal_max_scale": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 1.5
+        },
+        "extreme_max_scale": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 3.0
+        }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stiffness",
+        "damping",
+        "breakaway",
+        "dynamic_mix",
+        "memory_release_seconds",
+        "thermal_attack_seconds",
+        "thermal_release_seconds",
+        "thermal_drop",
+        "thermal_work_scale",
+        "hair_stiffness",
+        "hair_damping",
+        "hair_contact_mix"
+      ],
+      "properties": {
+        "stiffness": {
+          "type": "number",
+          "minimum": 100.0,
+          "maximum": 1000000.0
+        },
+        "damping": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 100.0
+        },
+        "breakaway": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "dynamic_mix": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 0.5
+        },
+        "memory_release_seconds": {
+          "$ref": "#/$defs/seconds"
+        },
+        "thermal_attack_seconds": {
+          "$ref": "#/$defs/seconds"
+        },
+        "thermal_release_seconds": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 5.0
+        },
+        "thermal_drop": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 0.5
+        },
+        "thermal_work_scale": {
+          "type": "number",
+          "minimum": 0.00001,
+          "maximum": 10.0
+        },
+        "hair_stiffness": {
+          "type": "number",
+          "minimum": 100.0,
+          "maximum": 1000000.0
+        },
+        "hair_damping": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 100.0
+        },
+        "hair_contact_mix": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "bow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speed_scale",
+        "friction",
+        "force_map",
+        "contact"
+      ],
+      "properties": {
+        "speed_scale": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 1.5
+        },
+        "friction": {
+          "$ref": "#/$defs/friction"
+        },
+        "force_map": {
+          "$ref": "#/$defs/forceMap"
+        },
+        "contact": {
+          "$ref": "#/$defs/contact"
+        }
+      }
+    },
+    "detache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "onset_seconds",
+        "stroke_seconds",
+        "force_base",
+        "force_attack",
+        "force_settle",
+        "speed_base",
+        "speed_attack",
+        "speed_settle",
+        "contact_attack_scale"
+      ],
+      "properties": {
+        "onset_seconds": { "$ref": "#/$defs/seconds" },
+        "stroke_seconds": { "$ref": "#/$defs/seconds" },
+        "force_base": { "$ref": "#/$defs/shape" },
+        "force_attack": { "$ref": "#/$defs/shape" },
+        "force_settle": { "$ref": "#/$defs/shape" },
+        "speed_base": { "$ref": "#/$defs/shape" },
+        "speed_attack": { "$ref": "#/$defs/shape" },
+        "speed_settle": { "$ref": "#/$defs/shape" },
+        "contact_attack_scale": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        }
+      }
+    },
+    "martele": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preload_seconds",
+        "acceleration_seconds",
+        "stroke_seconds",
+        "force_base",
+        "force_preload",
+        "force_acceleration",
+        "force_settle",
+        "speed_preload",
+        "speed_acceleration",
+        "speed_settle",
+        "contact_preload_scale"
+      ],
+      "properties": {
+        "preload_seconds": { "$ref": "#/$defs/seconds" },
+        "acceleration_seconds": { "$ref": "#/$defs/seconds" },
+        "stroke_seconds": { "$ref": "#/$defs/seconds" },
+        "force_base": { "$ref": "#/$defs/shape" },
+        "force_preload": { "$ref": "#/$defs/shape" },
+        "force_acceleration": { "$ref": "#/$defs/shape" },
+        "force_settle": { "$ref": "#/$defs/shape" },
+        "speed_preload": { "$ref": "#/$defs/shape" },
+        "speed_acceleration": { "$ref": "#/$defs/shape" },
+        "speed_settle": { "$ref": "#/$defs/shape" },
+        "contact_preload_scale": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        }
+      }
+    },
+    "spiccato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stroke_fast_seconds",
+        "stroke_slow_seconds",
+        "force_base",
+        "force_bounce",
+        "speed_base",
+        "speed_bounce"
+      ],
+      "properties": {
+        "stroke_fast_seconds": { "$ref": "#/$defs/seconds" },
+        "stroke_slow_seconds": { "$ref": "#/$defs/seconds" },
+        "force_base": { "$ref": "#/$defs/shape" },
+        "force_bounce": { "$ref": "#/$defs/shape" },
+        "speed_base": { "$ref": "#/$defs/shape" },
+        "speed_bounce": { "$ref": "#/$defs/shape" }
+      }
+    },
+    "tremolo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "onset_seconds",
+        "rate_min_hz",
+        "rate_max_hz",
+        "force_base",
+        "force_motion",
+        "contact_base",
+        "contact_motion"
+      ],
+      "properties": {
+        "onset_seconds": { "$ref": "#/$defs/seconds" },
+        "rate_min_hz": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 20.0
+        },
+        "rate_max_hz": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 20.0
+        },
+        "force_base": { "$ref": "#/$defs/shape" },
+        "force_motion": { "$ref": "#/$defs/shape" },
+        "contact_base": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "contact_motion": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        }
+      }
+    },
+    "gestures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transition_seconds",
+        "bow_change_seconds",
+        "bow_change_contact_dip",
+        "bow_change_force_floor",
+        "detache",
+        "martele",
+        "spiccato",
+        "tremolo"
+      ],
+      "properties": {
+        "transition_seconds": {
+          "type": "number",
+          "minimum": 0.0001,
+          "maximum": 0.2
+        },
+        "bow_change_seconds": {
+          "type": "number",
+          "minimum": 0.0001,
+          "maximum": 0.2
+        },
+        "bow_change_contact_dip": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "bow_change_force_floor": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "detache": { "$ref": "#/$defs/detache" },
+        "martele": { "$ref": "#/$defs/martele" },
+        "spiccato": { "$ref": "#/$defs/spiccato" },
+        "tremolo": { "$ref": "#/$defs/tremolo" }
+      }
+    },
+    "releaseT60": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arco",
+        "detache",
+        "martele",
+        "spiccato",
+        "tremolo",
+        "pizzicato_right",
+        "pizzicato_left",
+        "bartok",
+        "battuto",
+        "tratto"
+      ],
+      "properties": {
+        "arco": { "$ref": "#/$defs/releaseSeconds" },
+        "detache": { "$ref": "#/$defs/releaseSeconds" },
+        "martele": { "$ref": "#/$defs/releaseSeconds" },
+        "spiccato": { "$ref": "#/$defs/releaseSeconds" },
+        "tremolo": { "$ref": "#/$defs/releaseSeconds" },
+        "pizzicato_right": { "$ref": "#/$defs/releaseSeconds" },
+        "pizzicato_left": { "$ref": "#/$defs/releaseSeconds" },
+        "bartok": { "$ref": "#/$defs/releaseSeconds" },
+        "battuto": { "$ref": "#/$defs/releaseSeconds" },
+        "tratto": { "$ref": "#/$defs/releaseSeconds" }
+      }
+    },
+    "releaseSeconds": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 10.0
+    },
+    "harmonics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "touch_level",
+        "attack_seconds",
+        "release_seconds",
+        "order_transition_seconds"
+      ],
+      "properties": {
+        "touch_level": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          }
+        },
+        "attack_seconds": { "$ref": "#/$defs/seconds" },
+        "release_seconds": {
+          "type": "number",
+          "minimum": 0.0001,
+          "maximum": 2.0
+        },
+        "order_transition_seconds": { "$ref": "#/$defs/seconds" }
+      }
+    },
+    "pizzicato": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator requires pulse_min_seconds + pulse_range_seconds to be no more than 0.004.",
+      "required": [
+        "pulse_min_seconds",
+        "pulse_range_seconds",
+        "amplitude",
+        "noise_gain"
+      ],
+      "properties": {
+        "pulse_min_seconds": { "$ref": "#/$defs/pulseMinimum" },
+        "pulse_range_seconds": { "$ref": "#/$defs/pulseRange" },
+        "amplitude": { "$ref": "#/$defs/exciterGain" },
+        "noise_gain": { "$ref": "#/$defs/noiseGain" }
+      }
+    },
+    "bartok": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator checks that each minimum plus range is no more than 0.004 seconds.",
+      "required": [
+        "pulse_min_seconds",
+        "pulse_range_seconds",
+        "impact_delay_min_seconds",
+        "impact_delay_range_seconds",
+        "impact_min_seconds",
+        "impact_range_seconds",
+        "amplitude",
+        "noise_gain",
+        "impact_gain",
+        "impact_alternating_mix"
+      ],
+      "properties": {
+        "pulse_min_seconds": { "$ref": "#/$defs/pulseMinimum" },
+        "pulse_range_seconds": { "$ref": "#/$defs/pulseRange" },
+        "impact_delay_min_seconds": { "$ref": "#/$defs/pulseMinimum" },
+        "impact_delay_range_seconds": { "$ref": "#/$defs/pulseRange" },
+        "impact_min_seconds": { "$ref": "#/$defs/pulseMinimum" },
+        "impact_range_seconds": { "$ref": "#/$defs/pulseRange" },
+        "amplitude": { "$ref": "#/$defs/exciterGain" },
+        "noise_gain": { "$ref": "#/$defs/noiseGain" },
+        "impact_gain": { "$ref": "#/$defs/exciterGain" },
+        "impact_alternating_mix": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "pulseMinimum": {
+      "type": "number",
+      "exclusiveMinimum": 0.0,
+      "maximum": 0.004
+    },
+    "pulseRange": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 0.004
+    },
+    "exciterGain": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.25
+    },
+    "noiseGain": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "battuto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collision_seconds",
+        "noise_gain",
+        "speed_base",
+        "speed_force",
+        "stiffness_base",
+        "stiffness_force",
+        "damping_base",
+        "damping_force",
+        "mass_kg"
+      ],
+      "properties": {
+        "collision_seconds": {
+          "type": "number",
+          "minimum": 0.0001,
+          "maximum": 0.004
+        },
+        "noise_gain": { "$ref": "#/$defs/noiseGain" },
+        "speed_base": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "speed_force": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "stiffness_base": {
+          "type": "number",
+          "minimum": 100.0,
+          "maximum": 100000000.0
+        },
+        "stiffness_force": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100000000.0
+        },
+        "damping_base": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10000.0
+        },
+        "damping_force": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10000.0
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0.00001,
+          "maximum": 1.0
+        }
+      }
+    },
+    "tratto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speed_scale",
+        "transition_min",
+        "transition_range",
+        "force_gain",
+        "grain_gain"
+      ],
+      "properties": {
+        "speed_scale": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "transition_min": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 1.0
+        },
+        "transition_range": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "force_gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "grain_gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "exciters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "noise_highpass",
+        "contact_attack_seconds",
+        "contact_release_seconds",
+        "speed_smoothing_seconds",
+        "pizzicato_right",
+        "pizzicato_left",
+        "bartok",
+        "battuto",
+        "tratto"
+      ],
+      "properties": {
+        "noise_highpass": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 0.9999
+        },
+        "contact_attack_seconds": { "$ref": "#/$defs/seconds" },
+        "contact_release_seconds": { "$ref": "#/$defs/seconds" },
+        "speed_smoothing_seconds": { "$ref": "#/$defs/seconds" },
+        "pizzicato_right": { "$ref": "#/$defs/pizzicato" },
+        "pizzicato_left": { "$ref": "#/$defs/pizzicato" },
+        "bartok": { "$ref": "#/$defs/bartok" },
+        "battuto": { "$ref": "#/$defs/battuto" },
+        "tratto": { "$ref": "#/$defs/tratto" }
+      }
+    },
+    "coupling": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator requires a symmetric matrix with an exact zero diagonal.",
+      "required": [
+        "bridge_coefficients",
+        "sympathetic_open_scale"
+      ],
+      "properties": {
+        "bridge_coefficients": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 0.02
+            }
+          }
+        },
+        "sympathetic_open_scale": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 20.0
+        }
+      }
+    },
+    "bodyMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frequency_hz",
+        "bandwidth_hz",
+        "gain",
+        "pan"
+      ],
+      "properties": {
+        "frequency_hz": {
+          "type": "number",
+          "minimum": 20.0,
+          "maximum": 12000.0
+        },
+        "bandwidth_hz": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 5000.0
+        },
+        "gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 4.0
+        },
+        "pan": {
+          "type": "number",
+          "minimum": -1.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "$comment": "The generator requires body_decay_base above body_decay_range, strictly increasing mode frequencies, and bandwidth no greater than twice mode frequency.",
+      "required": [
+        "wet_gain",
+        "gain_smoothing_seconds",
+        "body_decay_base",
+        "body_decay_range",
+        "mute_decay_scale",
+        "body_tone_depth",
+        "mute_low_attenuation",
+        "mute_high_attenuation",
+        "mute_level_attenuation",
+        "modes"
+      ],
+      "properties": {
+        "wet_gain": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "gain_smoothing_seconds": { "$ref": "#/$defs/seconds" },
+        "body_decay_base": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10.0
+        },
+        "body_decay_range": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 9.0
+        },
+        "mute_decay_scale": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 20.0
+        },
+        "body_tone_depth": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "mute_low_attenuation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "mute_high_attenuation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "mute_level_attenuation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "modes": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/bodyMode"
+          }
+        }
+      }
+    }
+  }
+}
