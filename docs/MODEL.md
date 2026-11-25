@@ -7,12 +7,13 @@ The tests are the final check.
 
 Each handle owns four G, D, A, and E string states. A voice runs a two-rail
 digital waveguide and returns a quiet direct signal. It also writes bridge
-force into a hidden per-string lane.
+force into a hidden per-string lane. The force tap reads the bridge after
+one-way travel from the bow. The bow reads the round-trip reflection.
 
 The resonance opcode reads the four lanes from the prior Csound block. It
-drives twelve body modes and returns wet stereo sound. It may also feed a small
-part of bridge motion into open strings. This one-block delay makes the result
-independent of whether a voice or renderer runs first in a block.
+drives twelve body modes and returns wet stereo sound. A separate force
+history carries string-to-string feedback across 128 samples or one engine
+block, whichever is longer. Both paths work in either opcode order.
 
 The plug-in ends at the direct and body outputs. Distance, microphone tone,
 and room effects belong in the score or host.
@@ -43,9 +44,10 @@ through silence.
 
 ## Bow and exciters
 
-The neutral bow uses a bounded point-contact law. A small contact-memory term,
-a heat state, and spring-damper hair motion add history without changing the
-public controls. Force, signed speed, and position remain live at k-rate.
+The bow uses a main contact and a weaker second edge with a separate
+stick-slip calculation and propagation delay. A small contact-memory term,
+a heat state, and spring-damper hair motion add history. Force, signed speed,
+and position remain live at k-rate.
 
 The same rails also receive normal and left-hand pizzicato, Bartók pizzicato,
 col legno battuto, and col legno tratto. One-shot sounds fire once per rising
@@ -59,8 +61,9 @@ and a high-force squeal region. Every branch has finite and level limits.
 
 The voice input always gives the sounding pitch. For harmonic order `N`, the
 model derives an internal string pitch of `kFrequency / N` and places the
-touch at the matching node. Natural and artificial harmonics use the same
-stored string rails.
+touch at the matching node. The touch reflects and transmits waves along the
+nut-side branch. Period-based filtering helps the requested partial speak on
+rapid attacks. Natural and artificial harmonics use the same stored rails.
 
 The optional A4 constructor value retunes all pitch-linked state together.
 The score still has to send note frequencies in the same tuning.
@@ -73,6 +76,8 @@ view. Mode phase, smoothed gain, and decay live on the handle.
 
 `kBody` changes wet amount, tone, and decay. `kMute` lowers and darkens the
 body and raises its modal loss. The body reads no impulse response at runtime.
+The string feedback uses fixed coupling gains. A measured driving-point
+admittance would be needed to model bridge loading and its effect on bow force.
 
 ## Fixed data
 

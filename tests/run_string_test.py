@@ -298,6 +298,24 @@ def high_band_share(
     return high_energy / full_energy if full_energy > 0.0 else 0.0
 
 
+def partial_decay(samples: Sequence[float], frequency: float) -> float:
+    length = round(0.04 * SAMPLE_RATE)
+    omega = 2.0 * math.pi * frequency / SAMPLE_RATE
+    basis = [
+        (0.5 - 0.5 * math.cos(2.0 * math.pi * index / (length - 1))) *
+        complex(math.cos(index * omega), math.sin(index * omega))
+        for index in range(length)
+    ]
+
+    def level(start: float) -> float:
+        first = round(start * SAMPLE_RATE)
+        return abs(sum(sample * weight for sample, weight in
+                       zip(samples[first:first + length], basis)))
+
+    early = level(0.020)
+    return level(0.090) / early if early > 0.0 else 0.0
+
+
 def cubic_delay_magnitude(delay: float, omega: float) -> float:
     whole = math.floor(delay)
     fraction = delay - whole
@@ -413,7 +431,7 @@ def check_intrinsic_loss_spectrum(
         temporary = Path(folder)
         normal_a_frames = b""
         normal_a_share = 0.0
-        normal_a_decay = 0.0
+        normal_a_samples: list[float] = []
         for name, frequency, string in cases:
             output = temporary / "{}.wav".format(name)
             completed = render_audio(
@@ -504,7 +522,7 @@ def check_intrinsic_loss_spectrum(
             if name == "A":
                 normal_a_frames = frames
                 normal_a_share = early
-                normal_a_decay = late / early if early > 0.0 else 0.0
+                normal_a_samples = samples
 
         if not normal_a_frames:
             return
@@ -548,22 +566,20 @@ def check_intrinsic_loss_spectrum(
         if repeat_frames and repeat_frames != normal_a_frames:
             failures.append("A intrinsic string repeat changed PCM")
 
-        position_decays = [(0.12, normal_a_decay)]
+        position_renders = [(0.12, normal_a_samples)]
         for tag, position in (("near", 0.05), ("far", 0.24),
                               ("farthest", 0.40)):
             _, samples = render_a(tag, 1.0, position)
-            if not samples:
-                continue
-            early = high_band_share(samples, 0.005, 0.030)
-            late = high_band_share(samples, 0.080, 0.160)
-            if early > 0.0:
-                position_decays.append((position, late / early))
-        if (len(position_decays) == 4 and
-                max(item[1] for item in position_decays) >
-                1.05 * min(item[1] for item in position_decays)):
-            failures.append(
-                "A passive spectral decay changed with the inactive "
-                "junction: {}".format(position_decays))
+            position_renders.append((position, samples))
+        # Compare the same mode over time so the bridge tap's gain cancels.
+        for frequency in (880.0, 1320.0):
+            decays = [(position, partial_decay(samples, frequency))
+                      for position, samples in position_renders]
+            values = [decay for _, decay in decays]
+            if min(values) <= 0.0 or max(values) > 1.05 * min(values):
+                failures.append(
+                    f"A passive {frequency:g} Hz decay changed with the "
+                    f"inactive junction: {decays}")
 
 
 def check_retune(

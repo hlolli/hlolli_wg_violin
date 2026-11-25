@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import struct
 import subprocess
 import sys
 import tempfile
@@ -581,6 +582,38 @@ def check_multiple_strings(
                 failures.append("{} string {} cleared its rail".format(label, tag))
 
 
+def check_glide_reversal(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    states = run_success(
+        failures, "glide reversal", csound, module, csd,
+        {"TEST_CASE": 18, "TEST_KSMPS": 8}, (1, 2))
+    waves = states.get("WG_WAVE", {})
+    if 1 not in waves or 2 not in waves:
+        return
+    before, after = (value(waves[tag], "WG_WAVE", "read_delay")
+                     for tag in (1, 2))
+    if abs(after - before) > 8 * 0.25 + 1e-10:
+        failures.append(f"glide reversal moved {after - before:.6g} samples in one block")
+
+
+def check_bridge_arrival(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="violin-bridge-arrival-") as folder:
+        path = Path(folder) / "pluck.wav"
+        completed = run_csound(csound, module, csd, {"TEST_CASE": 19}, path)
+        if completed.returncode != 0:
+            failures.append(completed.stdout)
+            return
+        with wave.open(str(path), "rb") as stream:
+            frames = struct.iter_unpack("<hh", stream.readframes(stream.getnframes()))
+            onset = next((i for i, frame in enumerate(frames)
+                          if max(map(abs, frame)) > 1), None)
+    if onset is None or not 45 <= onset <= 57:
+        failures.append(f"bridge pluck arrived at sample {onset}, expected about 49")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--csound", required=True, type=Path)
@@ -594,6 +627,8 @@ def main() -> int:
         failures, arguments.csound, arguments.module, arguments.csd)
     check_auto_continuity(failures, arguments.csound, arguments.module, arguments.csd)
     check_portamento(failures, arguments.csound, arguments.module, arguments.csd)
+    check_glide_reversal(failures, arguments.csound, arguments.module, arguments.csd)
+    check_bridge_arrival(failures, arguments.csound, arguments.module, arguments.csd)
     check_finger_shift_block_invariance(
         failures, arguments.csound, arguments.module, arguments.csd)
     check_non_legato_rearm(failures, arguments.csound, arguments.module, arguments.csd)

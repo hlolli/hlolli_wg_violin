@@ -34,9 +34,12 @@
 #ifndef TEST_SR
 #define TEST_SR #48000#
 #endif
+#ifndef TEST_KSMPS
+#define TEST_KSMPS #32#
+#endif
 
 sr = $TEST_SR
-ksmps = 32
+ksmps = $TEST_KSMPS
 nchnls = 2
 0dbfs = 1
 
@@ -110,6 +113,17 @@ instr RenderLate
   aLeft, aRight hlolli_wg_violin_resonance \
       p4, 0.72, p5, 0.12
   outs aLeft, aRight
+endin
+
+instr BlockSizeVoice
+  aLeft, aRight hlolli_wg_violin \
+      1, 293.664767917408, 0.46, 0.52, 0.15, 0, 0, 0, 0, 0, 2, giViolinA
+  outch 1, aLeft
+endin
+
+instr BlockSizeRenderer
+  aLeft, aRight hlolli_wg_violin_resonance giViolinA, 0.72, $TEST_SYMPATHETIC, 0
+  outch 2, aLeft
 endin
 
 instr StressRenderer
@@ -382,6 +396,9 @@ instr ScheduleTest
     event_i "i", "StrangeVoice", 0, 0.22, \
         giViolinA, 1, 195.997717990875, 1, 0.66, 0.72
     event_i "i", "StrangeProbe", 0.200, 0.001, giViolinA, 1, 1
+  elseif $TEST_CASE == 11 then
+    event_i "i", "BlockSizeVoice", 0, 1
+    event_i "i", "BlockSizeRenderer", 0, 1
   endif
 endin
 

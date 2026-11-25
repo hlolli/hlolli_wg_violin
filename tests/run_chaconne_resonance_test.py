@@ -20,8 +20,19 @@ import play_bach_chaconne as playback
 
 RATE = 48000
 FFT_SIZE = 8192
-MODE_LIMITS = ((665.0, 18.0, 8.0), (1320.0, 24.0, 8.0),
-               (3300.0, 60.0, 8.0))
+# 665 Hz is close to the open E5 fundamental at 659.3 Hz.  With a fixed body
+# level that musical partial dominates the local ratio, so it is not a body
+# transfer check.  Keep the two separated modes as the regression targets.
+MODE_LIMITS = ((1320.0, 24.0, 8.0), (3300.0, 60.0, 8.0))
+
+
+def check_fixed_bus(csd: Path) -> None:
+    source = csd.read_text(encoding="utf-8")
+    if "giViolin, 0.78, $SYMPATHETIC_LEVEL, 0" not in source:
+        raise ValueError("Chaconne body level is not fixed")
+    if any(f"delay gaDry{channel}, ksmps / sr" not in source
+           for channel in ("Left", "Right")):
+        raise ValueError("Chaconne direct bus is not block delayed")
 
 
 def short_window(score: Path, performance: Path) -> tuple[str, list[float]]:
@@ -164,6 +175,7 @@ def main() -> int:
                  options.performance)
         if any(not path.resolve().is_file() for path in paths):
             raise ValueError("a Chaconne resonance input is missing")
+        check_fixed_bus(options.csd.resolve())
         with tempfile.TemporaryDirectory(
                 prefix="hlolli-bach-resonance-") as folder:
             root = Path(folder)

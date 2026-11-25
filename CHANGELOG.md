@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bound delay changes through pitch reversals and take the bridge force
+  after one-way travel from the contact point.
+- Use a fixed feedback delay for Csound blocks up to 128 samples. Add a
+  second bow contact and a spatial damping path for harmonic touch.
+- Reuse phase factors during tuning and skip unit release gain powers.
+- Keep the Chaconne body settings fixed and align its direct and wet buses.
+- Read the browser workbench factory from the bundle's named export.
+
 - License the plug-in under GPL-3.0-only.
 - Move the model source to `src/`, group research under `docs/`, and move
   test-only scripts into `tests/`. Replace the completed plan with short API,

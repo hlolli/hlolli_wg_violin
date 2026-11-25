@@ -897,6 +897,30 @@ def check_stress(
         failures.append("sympathetic-string stress rendered silence")
 
 
+def check_block_size(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    cases = {}
+    with tempfile.TemporaryDirectory(prefix="violin-feedback-blocks-") as folder:
+        for block, sympathetic in ((8, 0), (8, 1), (32, 1), (48, 1), (128, 1)):
+            path = Path(folder) / f"feedback-{block}-{sympathetic}.wav"
+            result = run_csound(csound, module, csd, {
+                "TEST_CASE": 11, "TEST_KSMPS": block,
+                "TEST_SYMPATHETIC": sympathetic,
+            }, path)
+            if result.returncode != 0:
+                failures.append(result.stdout)
+                return
+            _, (dry, wet) = read_wav(path)
+            cases[block, sympathetic] = (
+                dry[24000:46000], wet[24000 + block:46000 + block])
+    if cases[8, 0][1] == cases[8, 1][1]:
+        failures.append("sympathetic feedback added no wet signal")
+    for block in (32, 48, 128):
+        if cases[block, 1] != cases[8, 1]:
+            failures.append(f"aligned sympathetic PCM changed at ksmps={block}")
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csound", required=True, type=Path)
@@ -924,6 +948,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         options.neutral_module, options.neutral_csd)
     check_sympathetic_response(
         failures, options.csound, options.module, options.csd)
+    check_block_size(failures, options.csound, options.module, options.csd)
     check_target_rules(failures, options.csound, options.module, options.csd)
     check_reserved_articulation_coupling(
         failures, options.csound, options.module, options.csd)

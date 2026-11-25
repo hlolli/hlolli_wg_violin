@@ -82,6 +82,20 @@ instr Portamento
   outs aLeft, aRight
 endin
 
+instr ReverseGlide
+  kBlock timeinstk
+  kFrequency = kBlock >= 1200 && kBlock < 1210 ? 660 : 440
+  aLeft, aRight hlolli_wg_violin \
+      1, kFrequency, 0.46, 0.52, 0.15, 0, 0, 0, 0, 0, 3, giViolin
+  outs aLeft, aRight
+endin
+
+instr BridgePluck
+  aLeft, aRight hlolli_wg_violin \
+      1, 195.997717990875, 0.55, 0.60, 0.40, 0, 0, 5, 0, 0, 1, giViolin
+  outs aLeft, aRight
+endin
+
 instr GateReattack
   iNoteOff = 0.12
   iGap = 32 / sr
@@ -319,6 +333,12 @@ instr ScheduleTest
     ; An open-string arrival is one arrival, not an arrival plus a shift.
     event_i "i", "SmoothFingerArrival", 0, 0.40
     event_i "i", "ProbeOne", 0.399, 0.001, 1, 1
+  elseif $TEST_CASE == 18 then
+    event_i "i", "ReverseGlide", 0, 0.22
+    event_i "i", "ProbeOne", 9672 / sr, ksmps / sr, 3, 1
+    event_i "i", "ProbeOne", 9680 / sr, ksmps / sr, 3, 2
+  elseif $TEST_CASE == 19 then
+    event_i "i", "BridgePluck", 0, 0.02
   endif
 endin
 

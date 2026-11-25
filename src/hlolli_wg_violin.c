@@ -36,6 +36,8 @@
 #define WG_VIOLIN_FRICTION_LUT_SIZE 2049U
 #define WG_VIOLIN_FRICTION_MAX_SPEED 2.0
 #define WG_VIOLIN_BOW_SCAN_STEPS 16U
+#define WG_VIOLIN_BOW_HAIR_WIDTH_FRACTION 0.030
+#define WG_VIOLIN_BOW_EDGE_FORCE_FRACTION 0.003
 #define WG_VIOLIN_BOW_SOLVE_STEPS 12U
 #define WG_VIOLIN_BOW_DELAY_COMPENSATION_SAMPLES 0.10
 #define WG_VIOLIN_BOW_DELAY_COMPENSATION_START 0.18
@@ -67,6 +69,8 @@
 #define WG_VIOLIN_BOW_MECHANICS_LIMIT 0.03
 #define WG_VIOLIN_BOARD_VELOCITY_LIMIT 0.008
 #define WG_VIOLIN_COUPLING_LIMIT 0.0015
+#define WG_VIOLIN_COUPLING_DELAY 128U
+#define WG_VIOLIN_BRIDGE_MAX_BANKS (WG_VIOLIN_COUPLING_DELAY + 2U)
 #define WG_VIOLIN_BOARD_CLEARANCE 0.00065
 #define WG_VIOLIN_BOARD_DISPLACEMENT_LIMIT 0.004
 #define WG_VIOLIN_BOARD_STIFFNESS 350000.0
@@ -502,13 +506,14 @@ typedef struct {
   double *toward_bridge;
   double *toward_nut;
   double *harmonic_history;
-  double *bridge_send[2];
-  double *strange_coupling_send[2];
+  double *harmonic_period_history;
+  double *bow_edge_history;
+  double *bridge_send;
+  double *strange_coupling_send;
+  uint32_t bridge_bank_count;
+  uint32_t bridge_bank_size;
   const double *friction_lut;
-  uint64_t bridge_send_epoch[2];
-  int32_t bridge_send_valid[2];
-  uint64_t strange_coupling_send_epoch[2];
-  int32_t strange_coupling_send_valid[2];
+  uint64_t bridge_send_epoch[WG_VIOLIN_BRIDGE_MAX_BANKS];
   uint64_t bridge_send_samples;
   double bridge_send_energy;
   double bridge_send_peak;
@@ -536,6 +541,8 @@ typedef struct {
   double harmonic_order_mix;
   double harmonic_order_mix_step;
   double harmonic_touch_period;
+  double harmonic_nut_phase;
+  double harmonic_return_state;
   double harmonic_projection_input;
   double harmonic_projection_output;
   double delay_tuning_frequency;
@@ -548,10 +555,13 @@ typedef struct {
   double nut_gain;
   double nut_gain_target;
   double nut_state;
+  double bow_edge_nut_state;
+  double bow_edge_return_state;
   double bridge_pole;
   double bridge_gain;
   double bridge_gain_target;
   double bridge_state;
+  double bridge_tap_state;
   double string_loss_smoothing;
   double release_loop_gain;
   double release_loop_gain_target;
@@ -818,9 +828,11 @@ typedef struct WG_VIOLIN_STATE_ {
   double *rail_memory;
   double *bridge_memory;
   double *body_input;
-  double *sympathetic_control[2];
-  uint64_t sympathetic_control_epoch[2];
-  int32_t sympathetic_control_valid[2];
+  double *sympathetic_control;
+  uint64_t sympathetic_control_epoch[WG_VIOLIN_BRIDGE_MAX_BANKS];
+  uint32_t bridge_bank_count;
+  uint32_t coupling_delay_blocks;
+  uint32_t coupling_delay_remainder;
   uint32_t rail_size;
   WG_VIOLIN_STRING_STATE strings[WG_VIOLIN_STRINGS];
   double bridge_coupling_gain[WG_VIOLIN_STRINGS][WG_VIOLIN_STRINGS];
@@ -2057,9 +2069,8 @@ static double wg_violin_linear_delay_read(const double *data, uint32_t size,
       delay, WG_VIOLIN_MIN_BRANCH_DELAY, (double)size - 2.0);
   whole = (uint32_t)floor(delay);
   fraction = delay - (double)whole;
-  index0 = (uint32_t)(
-      ((uint64_t)write_index + (uint64_t)size - (uint64_t)whole) %
-      (uint64_t)size);
+  index0 = write_index >= whole ? write_index - whole
+                                : size - (whole - write_index);
   index1 = index0 == 0U ? size - 1U : index0 - 1U;
   return (1.0 - fraction) * data[index0] + fraction * data[index1];
 }
@@ -2100,10 +2111,9 @@ static double wg_violin_cubic_delay_read(const double *data, uint32_t size,
     return wg_violin_linear_delay_read(data, size, write_index, delay);
   }
   offset = 1.0 + fraction;
-  index0 = (uint32_t)(
-      ((uint64_t)write_index + (uint64_t)size -
-       (uint64_t)(whole - 1U)) %
-      (uint64_t)size);
+  whole -= 1U;
+  index0 = write_index >= whole ? write_index - whole
+                                : size - (whole - write_index);
   index1 = index0 == 0U ? size - 1U : index0 - 1U;
   index2 = index1 == 0U ? size - 1U : index1 - 1U;
   index3 = index2 == 0U ? size - 1U : index2 - 1U;
@@ -2124,7 +2134,32 @@ static void wg_violin_split_delay(double total, double position,
   *nut = total - *bridge;
 }
 
-static double wg_violin_cubic_phase_delay(double delay, double omega)
+typedef struct {
+  double omega;
+  double sin_omega;
+  double sin_two_omega;
+  double sin_three_omega;
+  double cos_omega;
+  double cos_two_omega;
+  double cos_three_omega;
+} WG_VIOLIN_PHASE_FACTORS;
+
+static WG_VIOLIN_PHASE_FACTORS wg_violin_phase_factors(double omega)
+{
+  WG_VIOLIN_PHASE_FACTORS factors;
+
+  factors.omega = omega;
+  factors.sin_omega = sin(omega);
+  factors.sin_two_omega = sin(2.0 * omega);
+  factors.sin_three_omega = sin(3.0 * omega);
+  factors.cos_omega = cos(omega);
+  factors.cos_two_omega = cos(2.0 * omega);
+  factors.cos_three_omega = cos(3.0 * omega);
+  return factors;
+}
+
+static double wg_violin_cubic_phase_delay(
+    double delay, const WG_VIOLIN_PHASE_FACTORS *phase)
 {
   const double whole = floor(delay);
   const double fraction = delay - whole;
@@ -2136,45 +2171,46 @@ static double wg_violin_cubic_phase_delay(double delay, double omega)
   double real;
   double negative_imaginary;
 
-  if (!(omega > 0.0)) {
+  if (!(phase->omega > 0.0)) {
     return delay;
   }
   if (whole < 2.0) {
     return whole + atan2(
-        fraction * sin(omega),
-        1.0 - fraction + fraction * cos(omega)) / omega;
+        fraction * phase->sin_omega,
+        1.0 - fraction + fraction * phase->cos_omega) / phase->omega;
   }
   offset = 1.0 + fraction;
   wg_violin_cubic_delay_coefficients(
       offset, &c0, &c1, &c2, &c3);
-  real = c0 + c1 * cos(omega) + c2 * cos(2.0 * omega) +
-      c3 * cos(3.0 * omega);
-  negative_imaginary = c1 * sin(omega) + c2 * sin(2.0 * omega) +
-      c3 * sin(3.0 * omega);
-  return whole - 1.0 + atan2(negative_imaginary, real) / omega;
+  real = c0 + c1 * phase->cos_omega + c2 * phase->cos_two_omega +
+      c3 * phase->cos_three_omega;
+  negative_imaginary = c1 * phase->sin_omega +
+      c2 * phase->sin_two_omega + c3 * phase->sin_three_omega;
+  return whole - 1.0 + atan2(negative_imaginary, real) / phase->omega;
 }
 
-static double wg_violin_reflection_phase_delay(double pole, double omega)
+static double wg_violin_reflection_phase_delay(
+    double pole, const WG_VIOLIN_PHASE_FACTORS *phase)
 {
-  if (!(omega > 0.0)) {
+  if (!(phase->omega > 0.0)) {
     return pole / fmax(1.0e-12, 1.0 - pole);
   }
-  return atan2(pole * sin(omega), 1.0 - pole * cos(omega)) / omega;
+  return atan2(pole * phase->sin_omega,
+      1.0 - pole * phase->cos_omega) / phase->omega;
 }
 
 static double wg_violin_loop_phase_samples(
     const WG_VIOLIN_STRING_STATE *string, double delay,
-    double position, double frequency, double sample_rate)
+    double position, const WG_VIOLIN_PHASE_FACTORS *phase)
 {
-  const double omega = WG_VIOLIN_TWO_PI * frequency / sample_rate;
   double bridge_delay;
   double nut_delay;
 
   wg_violin_split_delay(delay, position, &bridge_delay, &nut_delay);
-  return wg_violin_cubic_phase_delay(bridge_delay, omega) +
-      wg_violin_cubic_phase_delay(nut_delay, omega) +
-      wg_violin_reflection_phase_delay(string->nut_pole, omega) +
-      wg_violin_reflection_phase_delay(string->bridge_pole, omega);
+  return wg_violin_cubic_phase_delay(bridge_delay, phase) +
+      wg_violin_cubic_phase_delay(nut_delay, phase) +
+      wg_violin_reflection_phase_delay(string->nut_pole, phase) +
+      wg_violin_reflection_phase_delay(string->bridge_pole, phase);
 }
 
 static double wg_violin_solve_delay(
@@ -2182,22 +2218,24 @@ static double wg_violin_solve_delay(
     double sample_rate)
 {
   const double wanted = sample_rate / frequency;
+  const WG_VIOLIN_PHASE_FACTORS phase = wg_violin_phase_factors(
+      WG_VIOLIN_TWO_PI * frequency / sample_rate);
   double low = 2.0;
   double high = (double)string->rail_size - 2.0;
   uint32_t iteration;
 
   if (wg_violin_loop_phase_samples(
-          string, low, position, frequency, sample_rate) >= wanted) {
+          string, low, position, &phase) >= wanted) {
     return low;
   }
   if (wg_violin_loop_phase_samples(
-          string, high, position, frequency, sample_rate) <= wanted) {
+          string, high, position, &phase) <= wanted) {
     return high;
   }
   for (iteration = 0U; iteration < 48U; iteration++) {
     const double middle = 0.5 * (low + high);
     if (wg_violin_loop_phase_samples(
-            string, middle, position, frequency, sample_rate) < wanted) {
+            string, middle, position, &phase) < wanted) {
       low = middle;
     } else {
       high = middle;
@@ -2211,22 +2249,24 @@ static double wg_violin_solve_harmonic_delay(
     double tuning_frequency, double position, double sample_rate)
 {
   const double wanted = sample_rate / fundamental_frequency;
+  const WG_VIOLIN_PHASE_FACTORS phase = wg_violin_phase_factors(
+      WG_VIOLIN_TWO_PI * tuning_frequency / sample_rate);
   double low = 2.0;
   double high = (double)string->rail_size - 2.0;
   uint32_t iteration;
 
   if (wg_violin_loop_phase_samples(
-          string, low, position, tuning_frequency, sample_rate) >= wanted) {
+          string, low, position, &phase) >= wanted) {
     return low;
   }
   if (wg_violin_loop_phase_samples(
-          string, high, position, tuning_frequency, sample_rate) <= wanted) {
+          string, high, position, &phase) <= wanted) {
     return high;
   }
   for (iteration = 0U; iteration < 48U; iteration++) {
     const double middle = 0.5 * (low + high);
     if (wg_violin_loop_phase_samples(
-            string, middle, position, tuning_frequency, sample_rate) < wanted) {
+            string, middle, position, &phase) < wanted) {
       low = middle;
     } else {
       high = middle;
@@ -2594,8 +2634,17 @@ static void wg_violin_zero_waveguide(WG_VIOLIN_STRING_STATE *string,
   if (string->harmonic_history != NULL && string->rail_size > 0U) {
     memset(string->harmonic_history, 0,
            (size_t)string->rail_size * sizeof(double));
+    memset(string->harmonic_period_history, 0,
+           (size_t)string->rail_size * sizeof(double));
   }
+  if (string->bow_edge_history != NULL) {
+    memset(string->bow_edge_history, 0,
+           (size_t)string->rail_size * sizeof(double));
+  }
+  string->bow_edge_nut_state = 0.0;
+  string->bow_edge_return_state = 0.0;
   string->bridge_state = 0.0;
+  string->bridge_tap_state = 0.0;
   string->nut_state = 0.0;
   string->bridge_dynamic_input = 0.0;
   string->bridge_dynamic_output = 0.0;
@@ -2610,6 +2659,7 @@ static void wg_violin_zero_waveguide(WG_VIOLIN_STRING_STATE *string,
   string->harmonic_touch_pressure = 0.0;
   string->harmonic_order_mix = 0.0;
   string->harmonic_touch_period = 0.0;
+  string->harmonic_return_state = 0.0;
   string->harmonic_projection_input = 0.0;
   string->harmonic_projection_output = 0.0;
   string->release_loop_gain = 1.0;
@@ -2778,6 +2828,12 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
       pow(loop_gain, nut_loss_fraction), 0.0, 0.99995);
   string->bridge_gain_target = wg_violin_clamp(
       pow(loop_gain, bridge_loss_fraction), 0.0, 0.99995);
+  if (string->harmonic != 0U) {
+    const double omega = WG_VIOLIN_TWO_PI * tuning_frequency / sample_rate;
+    string->harmonic_nut_phase = atan2(
+        string->nut_pole * sin(omega),
+        1.0 - string->nut_pole * cos(omega)) / omega;
+  }
   string->target_delay = tuning_frequency == frequency
       ? wg_violin_solve_delay(string, frequency, position, sample_rate)
       : wg_violin_solve_harmonic_delay(
@@ -3582,115 +3638,113 @@ static double wg_violin_finger_tick(WG_VIOLIN_STRING_STATE *string)
 #endif
 }
 
-static double wg_violin_harmonic_projection(
+static double wg_violin_harmonic_period_average(
     const WG_VIOLIN_STRING_STATE *string, double input,
-    uint32_t order, double period)
+    uint32_t order, double loop_period)
 {
-  double projection = input;
-  uint32_t node;
+  double average = input;
+  uint32_t tap;
+  const double period = wg_violin_clamp(
+      loop_period / (double)order, 1.0,
+      ((double)string->rail_size - 2.0) / (double)(order - 1U));
 
-  if (order < WG_VIOLIN_HARMONIC_MIN_ORDER ||
-      order > WG_VIOLIN_HARMONIC_MAX_ORDER) {
-    return input;
+  for (tap = 1U; tap < order; tap++) {
+    average += wg_violin_linear_delay_read(
+        string->harmonic_period_history, string->rail_size,
+        string->harmonic_write_index, period * (double)tap);
   }
-  for (node = 1U; node < order; node++) {
-    projection += wg_violin_linear_delay_read(
-        string->harmonic_history, string->rail_size,
-        string->harmonic_write_index, period * (double)node);
-  }
-  return projection / (double)order;
+  return average / (double)order;
 }
 
 static double wg_violin_harmonic_tick(WG_VIOLIN_STRING_STATE *string,
-                                      double input,
+                                      double input, double nut_gain,
                                       double sample_rate)
 {
   uint32_t order = string->harmonic_filter_order;
-  const uint32_t pending_order = string->harmonic_pending_order;
-  double pressure_smoothing;
-  double projection = input;
-  double output = input;
-
-  if (string->harmonic_history == NULL || string->rail_size < 8U ||
-      !isfinite(input) || !(sample_rate > 0.0)) {
-    return input;
-  }
-  pressure_smoothing = string->harmonic_touch_target >
+  const uint32_t pending = string->harmonic_pending_order;
+  const double smoothing = string->harmonic_touch_target >
           string->harmonic_touch_pressure
       ? string->harmonic_touch_attack_smoothing
       : string->harmonic_touch_release_smoothing;
-  string->harmonic_touch_pressure = wg_violin_clamp(
-      wg_violin_smooth(
-          string->harmonic_touch_pressure,
-          string->harmonic_touch_target,
-          pressure_smoothing),
-      0.0, 1.0);
-  if (order >= WG_VIOLIN_HARMONIC_MIN_ORDER &&
-      order <= WG_VIOLIN_HARMONIC_MAX_ORDER &&
-      string->target_frequency > 0.0) {
+  double transmitted = input;
+  double output = input;
+
+  string->harmonic_touch_pressure = wg_violin_smooth(
+      string->harmonic_touch_pressure, string->harmonic_touch_target,
+      smoothing);
+  if (order != 0U && string->harmonic_touch_pressure > 1.0e-4) {
     const double loop_period = string->delay +
         sample_rate / string->target_frequency - string->target_delay;
-    const double maximum_period = ((double)string->rail_size - 2.0) /
-        (double)(order - 1U);
-    const double period = wg_violin_clamp(
-        loop_period / (double)order,
-        WG_VIOLIN_MIN_BRANCH_DELAY, maximum_period);
-
-    projection = wg_violin_harmonic_projection(
-        string, input, order, period);
-    if (pending_order >= WG_VIOLIN_HARMONIC_MIN_ORDER &&
-        pending_order <= WG_VIOLIN_HARMONIC_MAX_ORDER &&
-        pending_order != order) {
-      const double pending_maximum =
-          ((double)string->rail_size - 2.0) /
-          (double)(pending_order - 1U);
-      const double pending_period = wg_violin_clamp(
-          loop_period / (double)pending_order,
-          WG_VIOLIN_MIN_BRANCH_DELAY, pending_maximum);
-      const double pending_projection = wg_violin_harmonic_projection(
-          string, input, pending_order, pending_period);
-
+    double node_fraction = 1.0 / (double)order;
+    double periodic = wg_violin_harmonic_period_average(
+        string, input, order, loop_period);
+    const double commanded_fraction = string->harmonic != 0U
+        ? (string->harmonic_touch_position - string->harmonic_stop_position) /
+            (1.0 - string->harmonic_stop_position)
+        : node_fraction;
+    if (pending != 0U && pending != order) {
       string->harmonic_order_mix = fmin(
           1.0, string->harmonic_order_mix + string->harmonic_order_mix_step);
-      projection += string->harmonic_order_mix *
-          (pending_projection - projection);
-      string->harmonic_touch_period = pending_period;
+      node_fraction = wg_violin_smooth(node_fraction, commanded_fraction,
+                                      string->harmonic_order_mix);
+      periodic = wg_violin_smooth(periodic,
+          wg_violin_harmonic_period_average(string, input, pending, loop_period),
+          string->harmonic_order_mix);
       if (string->harmonic_order_mix >= 1.0) {
-        string->harmonic_filter_order = pending_order;
+        order = pending;
+        string->harmonic_filter_order = pending;
         string->harmonic_order_mix = 0.0;
       }
-    } else {
-      string->harmonic_order_mix = 0.0;
-      string->harmonic_touch_period = period;
+    } else if (order == string->harmonic) {
+      node_fraction = commanded_fraction;
     }
-    output = input + string->harmonic_touch_pressure * (projection - input);
+    string->harmonic_touch_period = loop_period / (double)(
+        pending != 0U ? pending : order);
+    {
+      const double to_nut = wg_violin_clamp(
+          loop_period * node_fraction - string->harmonic_nut_phase,
+          1.0, fmax(1.0, string->nut_delay - 1.0));
+      const double to_touch = fmax(1.0, string->nut_delay - to_nut);
+      const double reflection = -0.55 * string->harmonic_touch_pressure;
+      const double transmission = 1.0 + reflection;
+      const double at_touch = wg_violin_cubic_delay_read(
+          string->toward_nut, string->rail_size, string->nut_write_index,
+          to_touch);
+      const double from_nut = wg_violin_reflection_tick(
+          wg_violin_cubic_delay_read(string->harmonic_history,
+              string->rail_size, string->harmonic_write_index, to_nut),
+          string->nut_pole, nut_gain, &string->harmonic_return_state);
+
+      /* Each trip through the finger transmits once in each direction.
+         The partial reflection at the finger recirculates on the nut side. */
+      transmitted = transmission * transmission * input +
+          reflection * from_nut;
+      output = transmitted + reflection * at_touch;
+    }
+    /* Periodic selection keeps rapid high-order attacks on the intended mode. */
+    output = wg_violin_smooth(
+        input + string->harmonic_touch_pressure * (periodic - input),
+        output, 0.05 * string->harmonic_touch_pressure);
+    string->harmonic_touch_samples = wg_violin_add_samples(
+        string->harmonic_touch_samples, 1U);
   } else {
+    string->harmonic_return_state = input;
     string->harmonic_touch_period = 0.0;
-    string->harmonic_order_mix = 0.0;
+    if (pending == 0U) {
+      string->harmonic_filter_order = 0U;
+    }
   }
-  if (pending_order == 0U &&
-      string->harmonic_touch_pressure <= 1.0e-4) {
-    string->harmonic_filter_order = 0U;
-  }
-  if (!isfinite(projection) || !isfinite(output) ||
-      !isfinite(string->harmonic_touch_pressure) ||
-      !isfinite(string->harmonic_order_mix)) {
-    wg_violin_zero_waveguide(string, 1);
-    return 0.0;
-  }
-  string->harmonic_history[string->harmonic_write_index] = input;
+  string->harmonic_period_history[string->harmonic_write_index] = input;
+  string->harmonic_history[string->harmonic_write_index] = wg_violin_clamp(
+      transmitted, -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
   string->harmonic_write_index++;
   if (string->harmonic_write_index >= string->rail_size) {
     string->harmonic_write_index = 0U;
   }
   string->harmonic_projection_input = input;
-  string->harmonic_projection_output = output;
-  if (string->harmonic_touch_pressure > 1.0e-7) {
-    string->harmonic_touch_samples = wg_violin_add_samples(
-        string->harmonic_touch_samples, 1U);
-  }
-  return wg_violin_clamp(
+  string->harmonic_projection_output = wg_violin_clamp(
       output, -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
+  return string->harmonic_projection_output;
 }
 
 static uint32_t wg_violin_exciter_duration(double seconds,
@@ -4432,20 +4486,14 @@ static void wg_violin_advance_body_gap(WG_VIOLIN_STATE *state,
 static void wg_violin_prepare_bridge_send(
     WG_VIOLIN_STRING_STATE *string, uint64_t epoch, uint32_t ksmps)
 {
-  const uint32_t bank = (uint32_t)(epoch & 1U);
+  const uint32_t bank = (uint32_t)(epoch % string->bridge_bank_count);
+  const size_t offset = (size_t)bank * ksmps;
 
-  if (!string->bridge_send_valid[bank] ||
-      string->bridge_send_epoch[bank] != epoch) {
-    memset(string->bridge_send[bank], 0, (size_t)ksmps * sizeof(double));
-    string->bridge_send_epoch[bank] = epoch;
-    string->bridge_send_valid[bank] = 1;
-  }
-  if (!string->strange_coupling_send_valid[bank] ||
-      string->strange_coupling_send_epoch[bank] != epoch) {
-    memset(string->strange_coupling_send[bank], 0,
+  if (string->bridge_send_epoch[bank] != epoch + 1U) {
+    memset(string->bridge_send + offset, 0, (size_t)ksmps * sizeof(double));
+    memset(string->strange_coupling_send + offset, 0,
            (size_t)ksmps * sizeof(double));
-    string->strange_coupling_send_epoch[bank] = epoch;
-    string->strange_coupling_send_valid[bank] = 1;
+    string->bridge_send_epoch[bank] = epoch + 1U;
   }
 }
 
@@ -4453,11 +4501,12 @@ static void wg_violin_write_bridge_send(
     WG_VIOLIN_STRING_STATE *string, uint64_t epoch, uint32_t sample,
     double force)
 {
-  const uint32_t bank = (uint32_t)(epoch & 1U);
+  const size_t index = (size_t)(epoch % string->bridge_bank_count) *
+      string->bridge_bank_size + sample;
   const double finite_force = isfinite(force) ? force : 0.0;
 
-  string->bridge_send[bank][sample] = finite_force;
-  string->strange_coupling_send[bank][sample] = wg_violin_clamp(
+  string->bridge_send[index] = finite_force;
+  string->strange_coupling_send[index] = wg_violin_clamp(
       string->strange_coupling_mix, 0.0, 1.0);
   string->bridge_send_samples = wg_violin_add_samples(
       string->bridge_send_samples, 1U);
@@ -4466,33 +4515,44 @@ static void wg_violin_write_bridge_send(
       string->bridge_send_peak, fabs(finite_force));
 }
 
-static void wg_violin_prepare_sympathetic_control(
+static double *wg_violin_prepare_sympathetic_control(
     WG_VIOLIN_STATE *state, uint64_t epoch)
 {
-  const uint32_t bank = (uint32_t)(epoch & 1U);
+  const uint32_t bank = (uint32_t)(epoch % state->bridge_bank_count);
+  double *control = state->sympathetic_control + (size_t)bank * state->ksmps;
 
-  if (!state->sympathetic_control_valid[bank] ||
-      state->sympathetic_control_epoch[bank] != epoch) {
-    memset(state->sympathetic_control[bank], 0,
-           (size_t)state->ksmps * sizeof(double));
-    state->sympathetic_control_epoch[bank] = epoch;
-    state->sympathetic_control_valid[bank] = 1;
+  if (state->sympathetic_control_epoch[bank] != epoch + 1U) {
+    memset(control, 0, (size_t)state->ksmps * sizeof(double));
+    state->sympathetic_control_epoch[bank] = epoch + 1U;
   }
+  return control;
+}
+
+static uint64_t wg_violin_coupling_source_epoch(
+    const WG_VIOLIN_STATE *state, uint64_t epoch, uint32_t *sample)
+{
+  const uint32_t remainder = state->coupling_delay_remainder;
+  uint64_t blocks = state->coupling_delay_blocks;
+
+  if (*sample < remainder) {
+    *sample = state->ksmps - (remainder - *sample);
+    blocks++;
+  } else {
+    *sample -= remainder;
+  }
+  /* One-based epoch stamps distinguish an unwritten bank from epoch zero. */
+  return epoch >= blocks ? epoch - blocks + 1U : 0U;
 }
 
 static double wg_violin_sympathetic_control_at(
-    const WG_VIOLIN_STATE *state, uint64_t epoch, uint32_t sample)
+    const WG_VIOLIN_STATE *state, uint64_t source_stamp,
+    uint32_t bank, uint32_t sample)
 {
-  const uint64_t source_epoch = epoch > 0U ? epoch - 1U : 0U;
-  const uint32_t bank = (uint32_t)(source_epoch & 1U);
-
-  if (epoch == 0U || sample >= state->ksmps ||
-      !state->sympathetic_control_valid[bank] ||
-      state->sympathetic_control_epoch[bank] != source_epoch) {
+  if (source_stamp == 0U ||
+      state->sympathetic_control_epoch[bank] != source_stamp) {
     return 0.0;
   }
-  return wg_violin_clamp(
-      state->sympathetic_control[bank][sample], 0.0, 1.0);
+  return state->sympathetic_control[(size_t)bank * state->ksmps + sample];
 }
 
 static double wg_violin_sympathetic_control_max(
@@ -4503,8 +4563,14 @@ static double wg_violin_sympathetic_control_max(
   uint32_t sample;
 
   for (sample = offset; sample < limit; sample++) {
-    maximum = fmax(
-        maximum, wg_violin_sympathetic_control_at(state, epoch, sample));
+    uint32_t source_sample = sample;
+    const uint64_t stamp = wg_violin_coupling_source_epoch(
+        state, epoch, &source_sample);
+    if (stamp != 0U) {
+      const uint32_t bank = (uint32_t)((stamp - 1U) % state->bridge_bank_count);
+      maximum = fmax(maximum, wg_violin_sympathetic_control_at(
+          state, stamp, bank, source_sample));
+    }
   }
   return maximum;
 }
@@ -4900,10 +4966,13 @@ static double wg_violin_bridge_coupling_tick(
     uint32_t sample)
 {
   WG_VIOLIN_STRING_STATE *target = &state->strings[target_index];
-  const uint64_t source_epoch = epoch > 0U ? epoch - 1U : 0U;
-  const uint32_t bank = (uint32_t)(source_epoch & 1U);
+  const uint64_t stamp = wg_violin_coupling_source_epoch(
+      state, epoch, &sample);
+  const uint32_t bank = stamp != 0U
+      ? (uint32_t)((stamp - 1U) % state->bridge_bank_count) : 0U;
+  const size_t index = (size_t)bank * state->ksmps + sample;
   const double sympathetic = wg_violin_sympathetic_control_at(
-      state, epoch, sample);
+      state, stamp, bank, sample);
   const int32_t reserved_target = target->controller_owner != NULL &&
       target->articulation > WG_VIOLIN_ARTICULATION_TRATTO;
   const int32_t active_target = !reserved_target &&
@@ -4920,7 +4989,8 @@ static double wg_violin_bridge_coupling_tick(
   uint32_t source_mask = 0U;
   uint32_t source_index;
 
-  if (!wg_violin_bow_mechanics_is_finite(target)) {
+  if (!isfinite(target->coupling_input) ||
+      !isfinite(target->coupling_energy) || !isfinite(target->coupling_peak)) {
     wg_violin_recover_bow_mechanics(target);
   }
   if (target_mix <= 1.0e-12) {
@@ -4928,7 +4998,7 @@ static double wg_violin_bridge_coupling_tick(
     target->coupling_source_mask = 0U;
     return 0.0;
   }
-  if (epoch > 0U) {
+  if (stamp != 0U) {
     for (source_index = 0U; source_index < WG_VIOLIN_STRINGS;
          source_index++) {
       WG_VIOLIN_STRING_STATE *source;
@@ -4939,19 +5009,14 @@ static double wg_violin_bridge_coupling_tick(
         continue;
       }
       source = &state->strings[source_index];
-      if (!source->bridge_send_valid[bank] ||
-          source->bridge_send_epoch[bank] != source_epoch) {
+      if (source->bridge_send_epoch[bank] != stamp) {
         continue;
       }
-      force = source->bridge_send[bank][sample];
+      force = source->bridge_send[index];
       if (!isfinite(force)) {
         continue;
       }
-      if (source->strange_coupling_send_valid[bank] &&
-          source->strange_coupling_send_epoch[bank] == source_epoch) {
-        strange_mix = wg_violin_clamp(
-            source->strange_coupling_send[bank][sample], 0.0, 1.0);
-      }
+      strange_mix = source->strange_coupling_send[index];
       result += target_mix *
           (1.0 + WG_VIOLIN_STRANGE_COUPLING *
               strange_mix) *
@@ -5500,6 +5565,56 @@ static double wg_violin_bow_tick(WG_VIOLIN_STRING_STATE *string,
   return increment;
 }
 
+static double wg_violin_bow_edge_delay(
+    const WG_VIOLIN_STRING_STATE *string, double sample_rate)
+{
+  return wg_violin_clamp(
+      0.5 * WG_VIOLIN_BOW_HAIR_WIDTH_FRACTION * sample_rate /
+          string->open_frequency,
+      1.0, fmax(1.0, 0.25 * string->nut_delay));
+}
+
+static double wg_violin_bow_edge_return(
+    WG_VIOLIN_STRING_STATE *string, double separation, double nut_gain)
+{
+  const double direct = wg_violin_linear_delay_read(
+      string->bow_edge_history, string->rail_size, string->nut_write_index,
+      separation);
+  const double incident_nut = wg_violin_linear_delay_read(
+      string->bow_edge_history, string->rail_size, string->nut_write_index,
+      string->nut_delay - separation);
+
+  return direct + wg_violin_reflection_tick(incident_nut, string->nut_pole,
+      nut_gain, &string->bow_edge_return_state);
+}
+
+static double wg_violin_bow_edge_tick(WG_VIOLIN_STRING_STATE *string,
+                                     double separation, double nut_gain,
+                                     double normal_force)
+{
+  const double from_bow = wg_violin_linear_delay_read(
+      string->toward_nut, string->rail_size, string->nut_write_index,
+      separation);
+  const double from_nut = wg_violin_reflection_tick(
+      wg_violin_linear_delay_read(
+          string->toward_nut, string->rail_size, string->nut_write_index,
+          string->nut_delay - separation) +
+      wg_violin_linear_delay_read(
+          string->bow_edge_history, string->rail_size, string->nut_write_index,
+          string->nut_delay - 2.0 * separation),
+      string->nut_pole, nut_gain, &string->bow_edge_nut_state);
+  const double free_slip = string->hair_effective_speed - from_bow - from_nut;
+  const double impedance = 2.0 * string->characteristic_impedance;
+  const double static_limit = normal_force *
+      wg_violin_profile_static_mu(wg_violin_bound_profile(string)) *
+      string->contact_thermal_scale / impedance;
+  if (fabs(free_slip) <= static_limit) {
+    return free_slip;
+  }
+  return copysign(fmin(fabs(free_slip), normal_force *
+      wg_violin_friction_mu(string, free_slip) / impedance), free_slip);
+}
+
 static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
                                        int32_t controls_enabled,
                                        double sample_rate,
@@ -5511,10 +5626,15 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   double desired_delay;
   double desired_velocity;
   double delay_step;
+  double delay_error;
   double finger_excitation;
   double bridge_in;
   double nut_in;
+  double nut_gain;
+  double edge_delay = 0.0;
+  double edge_increment = 0.0;
   double bridge_reflected;
+  double bridge_gain;
   double nut_reflected;
   double toward_bridge;
   double toward_nut;
@@ -5545,16 +5665,19 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
     string->vibrato_phase += string->vibrato_rate_hz / sample_rate;
     string->vibrato_phase -= floor(string->vibrato_phase);
   }
+  delay_error = desired_delay - string->delay;
   desired_velocity = wg_violin_clamp(
-      0.20 * (desired_delay - string->delay),
+      0.20 * delay_error,
       -WG_VIOLIN_DELAY_SLEW, WG_VIOLIN_DELAY_SLEW);
   string->delay_velocity = wg_violin_smooth(
       string->delay_velocity, desired_velocity,
       string->delay_velocity_smoothing);
   delay_step = string->delay_velocity;
-  if ((desired_delay - string->delay) * delay_step <= 0.0 ||
-      fabs(delay_step) > fabs(desired_delay - string->delay)) {
-    delay_step = desired_delay - string->delay;
+  if (delay_error * delay_step <= 0.0) {
+    delay_step = 0.0;
+    string->delay_velocity = 0.0;
+  } else if (fabs(delay_step) >= fabs(delay_error)) {
+    delay_step = delay_error;
     string->delay_velocity = 0.0;
   }
   string->delay += delay_step;
@@ -5641,34 +5764,47 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
     wg_violin_zero_waveguide(string, 1);
     return 0.0;
   }
+  /* The two powers form one full-loop loss at every pitch. */
+  bridge_gain = string->bridge_gain;
+  if (release_loop_gain < 1.0) {
+    bridge_gain *= pow(release_loop_gain, 1.0 - nut_loss_fraction);
+  }
   bridge_reflected = wg_violin_reflection_tick(
-      bridge_in, string->bridge_pole,
-      /* The two powers form one full-loop loss at every pitch. */
-      string->bridge_gain *
-          pow(release_loop_gain, 1.0 - nut_loss_fraction),
+      bridge_in, string->bridge_pole, bridge_gain,
       &string->bridge_state);
   bridge_reflected = wg_violin_strange_dispersion_tick(
       string, bridge_reflected);
   bridge_reflected = wg_violin_clamp(
       bridge_reflected + bridge_coupling,
       -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
-  nut_reflected = wg_violin_reflection_tick(
-      nut_in, string->nut_pole,
-      string->nut_gain * pow(release_loop_gain, nut_loss_fraction),
-      &string->nut_state);
-  if (string->finger_position > WG_VIOLIN_FINGER_STOP_EPSILON) {
-    nut_reflected *= 0.965 + 0.035 * string->finger_pressure;
+  nut_gain = string->nut_gain;
+  if (release_loop_gain < 1.0) {
+    nut_gain *= pow(release_loop_gain, nut_loss_fraction);
   }
+  if (string->finger_position > WG_VIOLIN_FINGER_STOP_EPSILON) {
+    nut_gain *= 0.965 + 0.035 * string->finger_pressure;
+  }
+  nut_reflected = wg_violin_reflection_tick(
+      nut_in, string->nut_pole, nut_gain, &string->nut_state);
   nut_reflected = wg_violin_clamp(
       nut_reflected + finger_excitation,
       -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
   nut_reflected = wg_violin_harmonic_tick(
-      string, nut_reflected, sample_rate);
+      string, nut_reflected, nut_gain, sample_rate);
   if (controls_enabled && string->articulation <
           WG_VIOLIN_ARTICULATION_PIZZICATO) {
+    if (string->bow_contact > 1.0e-7) {
+      edge_delay = wg_violin_bow_edge_delay(string, sample_rate);
+      nut_reflected += wg_violin_bow_edge_return(string, edge_delay, nut_gain);
+    }
     /* Point law: string velocity = returning velocity + F / (2 Z0). */
     junction_increment = wg_violin_bow_tick(
         string, bridge_reflected + nut_reflected, sample_rate);
+    if (edge_delay > 0.0 && string->bow_effective_force > 0.0) {
+      edge_increment = wg_violin_bow_edge_tick(
+          string, edge_delay, nut_gain,
+          WG_VIOLIN_BOW_EDGE_FORCE_FRACTION * string->bow_effective_force);
+    }
   } else {
     if (!wg_violin_bow_mechanics_is_finite(string)) {
       wg_violin_recover_bow_mechanics(string);
@@ -5714,7 +5850,14 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
       toward_nut, -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
   string->toward_bridge[string->bridge_write_index] = toward_bridge;
   string->toward_nut[string->nut_write_index] = toward_nut;
-  output = 0.5 * (bridge_in - bridge_reflected);
+  string->bow_edge_history[string->nut_write_index] = wg_violin_clamp(
+      edge_increment, -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
+  /* The radiation tap is at the bridge, halfway along the return path. */
+  bridge_in = wg_violin_cubic_delay_read(
+      string->toward_bridge, string->rail_size,
+      string->bridge_write_index, 0.5 * string->bridge_delay);
+  output = 0.5 * (bridge_in - wg_violin_reflection_tick(
+      bridge_in, string->bridge_pole, bridge_gain, &string->bridge_tap_state));
   if (string->articulation < WG_VIOLIN_ARTICULATION_PIZZICATO) {
     string->bridge_dynamic_output = output - string->bridge_dynamic_input +
         string->bridge_dynamic_pole * string->bridge_dynamic_output;
@@ -5905,9 +6048,15 @@ static void wg_violin_advance_string_gap(WG_VIOLIN_STRING_STATE *string,
         string->toward_bridge[index] *= scale;
         string->toward_nut[index] *= scale;
         string->harmonic_history[index] = 0.0;
+        string->harmonic_period_history[index] = 0.0;
+        string->bow_edge_history[index] = 0.0;
       }
       string->bridge_state *= scale;
+      string->bridge_tap_state *= scale;
       string->nut_state *= scale;
+      string->harmonic_return_state = 0.0;
+      string->bow_edge_nut_state = 0.0;
+      string->bow_edge_return_state = 0.0;
       wg_violin_bridge_dynamic_fast_forward(string, remaining, scale);
       string->delay += wg_violin_clamp(
           string->target_delay - string->delay,
@@ -6219,6 +6368,7 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
   double required_size;
   size_t total_values;
   size_t bridge_values;
+  size_t history_samples;
   size_t allocation_bytes;
   uint32_t string_index;
   int32_t locks_ok;
@@ -6244,7 +6394,7 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
   state->rail_size = (uint32_t)required_size;
   if (!wg_violin_checked_size_multiply(
           (size_t)state->rail_size,
-          (size_t)(3U * WG_VIOLIN_STRINGS), &total_values) ||
+          (size_t)(5U * WG_VIOLIN_STRINGS), &total_values) ||
       !wg_violin_checked_size_multiply(
           total_values, sizeof(double), &allocation_bytes)) {
     csound->Free(csound, state);
@@ -6256,9 +6406,17 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
     csound->Free(csound, state);
     return NULL;
   }
+  /* A full host block must have been written regardless of callback order. */
+  state->coupling_delay_blocks = ksmps >= WG_VIOLIN_COUPLING_DELAY
+      ? 1U : WG_VIOLIN_COUPLING_DELAY / ksmps;
+  state->coupling_delay_remainder = ksmps >= WG_VIOLIN_COUPLING_DELAY
+      ? 0U : WG_VIOLIN_COUPLING_DELAY % ksmps;
+  state->bridge_bank_count = state->coupling_delay_blocks + 2U;
   if (!wg_violin_checked_size_multiply(
-          (size_t)ksmps,
-          (size_t)(5U * WG_VIOLIN_STRINGS + 2U), &bridge_values) ||
+          ksmps, state->bridge_bank_count, &history_samples) ||
+      !wg_violin_checked_size_multiply(
+          ksmps, (2U * WG_VIOLIN_STRINGS + 1U) *
+              state->bridge_bank_count + WG_VIOLIN_STRINGS, &bridge_values) ||
       !wg_violin_checked_size_multiply(
           bridge_values, sizeof(double), &allocation_bytes)) {
     csound->Free(csound, state->rail_memory);
@@ -6273,10 +6431,9 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
     return NULL;
   }
   state->body_input = state->bridge_memory +
-      (size_t)ksmps * 2U * WG_VIOLIN_STRINGS;
-  state->sympathetic_control[0] = state->body_input +
+      history_samples * 2U * WG_VIOLIN_STRINGS;
+  state->sympathetic_control = state->body_input +
       (size_t)ksmps * WG_VIOLIN_STRINGS;
-  state->sympathetic_control[1] = state->sympathetic_control[0] + ksmps;
   state->handle = handle;
   state->profile = profile;
   state->ksmps = ksmps;
@@ -6304,21 +6461,20 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
     const WG_VIOLIN_STRING_PROFILE *string_profile =
         &profile->strings[string_index];
     double *memory = state->rail_memory +
-        (size_t)string_index * 3U * state->rail_size;
+        (size_t)string_index * 5U * state->rail_size;
     string->profile = profile;
     string->string_index = string_index;
     string->toward_bridge = memory;
     string->toward_nut = memory + state->rail_size;
     string->harmonic_history = memory + 2U * state->rail_size;
-    string->bridge_send[0] = state->bridge_memory +
-        (size_t)string_index * ksmps;
-    string->bridge_send[1] = state->bridge_memory +
-        ((size_t)WG_VIOLIN_STRINGS + string_index) * ksmps;
-    string->strange_coupling_send[0] = state->sympathetic_control[1] +
-        ksmps + (size_t)string_index * ksmps;
-    string->strange_coupling_send[1] =
-        state->sympathetic_control[1] + ksmps +
-        ((size_t)WG_VIOLIN_STRINGS + string_index) * ksmps;
+    string->harmonic_period_history = memory + 3U * state->rail_size;
+    string->bow_edge_history = memory + 4U * state->rail_size;
+    string->bridge_send = state->bridge_memory +
+        (size_t)string_index * history_samples;
+    string->strange_coupling_send = state->bridge_memory +
+        (WG_VIOLIN_STRINGS + (size_t)string_index) * history_samples;
+    string->bridge_bank_size = ksmps;
+    string->bridge_bank_count = state->bridge_bank_count;
     string->friction_lut = manager->friction_lut[profile_index];
     string->rail_size = state->rail_size;
     string->position = 0.12;
@@ -7439,15 +7595,15 @@ static double wg_violin_collect_bridge_input(
     WG_VIOLIN_STRING_STATE *string = &state->strings[string_index];
     double *input = state->body_input +
         (size_t)string_index * state->ksmps;
-    const uint32_t bank = (uint32_t)(source_epoch & 1U);
+    const uint32_t bank = (uint32_t)(source_epoch % state->bridge_bank_count);
 
     memset(input + offset, 0,
            (size_t)(limit - offset) * sizeof(double));
     csound->LockMutex(string->lock);
     activity = fmax(activity, string->trigger);
-    if (source_valid && string->bridge_send_valid[bank] &&
-        string->bridge_send_epoch[bank] == source_epoch) {
-      memcpy(input + offset, string->bridge_send[bank] + offset,
+    if (source_valid && string->bridge_send_epoch[bank] == source_epoch + 1U) {
+      memcpy(input + offset,
+             string->bridge_send + (size_t)bank * state->ksmps + offset,
              (size_t)(limit - offset) * sizeof(double));
     }
     csound->UnlockMutex(string->lock);
@@ -7523,20 +7679,27 @@ static int32_t wg_violin_resonance_perf(
         p->violin->handle);
   }
   wg_violin_advance_renderer_gap(p->violin, start_sample);
-  p->violin->body = wg_violin_clamp(
-      wg_violin_input(p->kbody, 0.72), 0.0, 1.0);
+  {
+    const double body = wg_violin_clamp(
+        wg_violin_input(p->kbody, 0.72), 0.0, 1.0);
+    const double mute = wg_violin_clamp(
+        wg_violin_input(p->kmute, 0.0), 0.0, 1.0);
+    if (body != p->violin->body || mute != p->violin->mute) {
+      p->violin->body = body;
+      p->violin->mute = mute;
+      wg_violin_prepare_body(p->violin);
+    }
+  }
   p->violin->sympathetic = wg_violin_clamp(
       wg_violin_input(p->ksympathetic, 0.55), 0.0, 1.0);
-  p->violin->mute = wg_violin_clamp(
-      wg_violin_input(p->kmute, 0.0), 0.0, 1.0);
-  wg_violin_prepare_sympathetic_control(p->violin, epoch);
-  for (sample = offset; sample < limit; sample++) {
-    p->violin->sympathetic_control[(uint32_t)(epoch & 1U)][sample] =
-        p->violin->sympathetic;
+  {
+    double *control = wg_violin_prepare_sympathetic_control(p->violin, epoch);
+    for (sample = offset; sample < limit; sample++) {
+      control[sample] = p->violin->sympathetic;
+    }
   }
   wg_violin_advance_unowned_open_strings(
       csound, p->violin, epoch, block_start, offset, limit);
-  wg_violin_prepare_body(p->violin);
   activity = wg_violin_collect_bridge_input(
       csound, p->violin, epoch, offset, limit);
   p->violin->resonance_activity = fmax(
@@ -8033,10 +8196,11 @@ static int32_t wg_violin_test_waveguide_init(
     bridge_signature /= (double)string->rail_size;
   }
   if (string->target_frequency > 0.0) {
+    const WG_VIOLIN_PHASE_FACTORS phase = wg_violin_phase_factors(
+        WG_VIOLIN_TWO_PI * string->target_frequency / state->sample_rate);
     loop_phase = wg_violin_loop_phase_samples(
         string, string->target_delay, string->delay_position,
-        string->target_frequency,
-        state->sample_rate);
+        &phase);
   }
   if (!isfinite(string->delay) || !isfinite(string->target_delay) ||
       !isfinite(string->target_frequency) || !isfinite(loop_phase) ||
@@ -8538,8 +8702,8 @@ static int32_t wg_violin_test_strange_init(
   csound->LockMutex(string->lock);
   *p->strange = (MYFLT)string->strange;
   *p->sympathetic = (MYFLT)state->sympathetic;
-  *p->sympathetic_applied = (MYFLT)wg_violin_sympathetic_control_at(
-      state, epoch, sample);
+  *p->sympathetic_applied = (MYFLT)wg_violin_sympathetic_control_max(
+      state, epoch, sample, sample + 1U);
   *p->air_state = (MYFLT)string->strange_air_state;
   *p->dispersion_input = (MYFLT)string->strange_dispersion_input;
   *p->dispersion_output = (MYFLT)string->strange_dispersion_output;

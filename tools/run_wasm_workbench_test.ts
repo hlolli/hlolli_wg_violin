@@ -42,12 +42,12 @@ async function browserFactory(compilerRoot: string): Promise<any> {
     "node_modules/@csound/browser/dist/csound.js"
   )
   const source = await Bun.file(entry).text()
-  const expected =
-    "const Csound = kd; const libcsound = __lcs__; export { Csound, libcsound }; export default Csound;"
-  if (!source.includes(expected)) {
+  const browserExports =
+    /const Csound = [\w$]+; const libcsound = ([\w$]+); export \{ Csound, libcsound \}; export default Csound;(?=\s*(?:\/\/# sourceMappingURL=\S+)?\s*$)/
+  if (!browserExports.test(source)) {
     throw new Error("the pinned Csound browser entry changed")
   }
-  return new Function(source.replace(expected, "return __lcs__;"))()
+  return new Function(source.replace(browserExports, "return $1;"))()
 }
 
 async function main(): Promise<void> {

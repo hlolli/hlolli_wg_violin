@@ -387,6 +387,12 @@ instr StringController
   kStrokeTrigger = gkTrigger[iString] * gkStrokeGate * \
       gkChordContact[iString]
 
+  ; Keep the chord lead close to the bridge through the roll.
+  if iString == kLeadString && gkChordSize[iString] >= 3 then
+    kPosition = 0.11
+    kSpeed *= 0.96
+  endif
+
   aLeft, aRight hlolli_wg_violin \
       kStrokeTrigger, kFrequency, kForce, kSpeed, kPosition, \
       0, 0, gkArticulation[iString], 0, 0, iString, giViolin
@@ -395,31 +401,17 @@ instr StringController
 endin
 
 instr ViolinBody
-  kChordSize = 1
-  kString = 1
-  while kString <= 4 do
-    if gkTrigger[kString] > 0.000001 then
-      kChordSize = max(kChordSize, gkChordSize[kString])
-    endif
-    kString += 1
-  od
-  if kChordSize >= 4 then
-    kBodyTarget = 0.14
-  elseif kChordSize == 3 then
-    kBodyTarget = 0.18
-  else
-    kBodyTarget = 0.78
-  endif
-  kBody portk kBodyTarget, 0.030
   aLeft, aRight hlolli_wg_violin_resonance \
-      giViolin, kBody, $SYMPATHETIC_LEVEL, 0
+      giViolin, 0.78, $SYMPATHETIC_LEVEL, 0
   gaWetLeft += aLeft
   gaWetRight += aRight
 endin
 
 instr Listener
-  aSourceLeft = $DIRECT_LEVEL * gaDryLeft + $BODY_LEVEL * gaWetLeft
-  aSourceRight = $DIRECT_LEVEL * gaDryRight + $BODY_LEVEL * gaWetRight
+  aDryLeft delay gaDryLeft, ksmps / sr
+  aDryRight delay gaDryRight, ksmps / sr
+  aSourceLeft = $DIRECT_LEVEL * aDryLeft + $BODY_LEVEL * gaWetLeft
+  aSourceRight = $DIRECT_LEVEL * aDryRight + $BODY_LEVEL * gaWetRight
   aDirectLeft, aDirectRight, aRoomLeft, aRoomRight \
       HlolViolinDistance \
       aSourceLeft, aSourceRight, $VIOLIN_DISTANCE_METERS

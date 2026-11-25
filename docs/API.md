@@ -101,7 +101,11 @@ The signature is `aa <- ikkk`.
 
 One resonance opcode owns the body for one handle. It reads bridge force from
 the prior Csound block, so its wet output arrives one `ksmps` block after the
-direct strings. Keep it running for as long as you need the body tail.
+direct strings. Delay the summed direct bus by one block when mixing the two.
+Keep the renderer running for as long as you need the body tail.
+
+String-to-string feedback uses a delay of 128 samples or one Csound block,
+whichever is longer. At 48 kHz, 128 samples are about 2.67 ms.
 
 ## State rules
 
