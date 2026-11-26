@@ -293,7 +293,8 @@ instr ScheduleTest
     event_i "i", "Release", 0, 0.45, giViolin, 1
     event_i "i", "BowProbe", 0.24, 0.001, giViolin, 1, 1
     event_i "i", "BowProbe", 0.251, 0.001, giViolin, 1, 2
-    event_i "i", "BowProbe", 0.40, 0.001, giViolin, 1, 3
+    event_i "i", "BowProbe", 0.255, 0.001, giViolin, 1, 3
+    event_i "i", "BowProbe", 0.40, 0.001, giViolin, 1, 4
     event_i "i", "WaveProbe", 0.44, 0.001, giViolin, 1, 1
   endif
 endin

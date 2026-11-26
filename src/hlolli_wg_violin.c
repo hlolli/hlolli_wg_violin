@@ -624,6 +624,7 @@ typedef struct {
   double bow_contact_default_attack_smoothing;
   double bow_contact_attack_smoothing;
   double bow_contact_release_smoothing;
+  double bow_lift_smoothing;
   double bow_position_smoothing;
   double bow_scratch_rise;
   double bow_scratch_fall;
@@ -5799,6 +5800,11 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   finger_excitation = wg_violin_finger_tick(string);
   if (controls_enabled) {
     const int32_t old_direction = string->bow_direction;
+    const double contact_fall = !string->release_gate_positive &&
+        string->articulation <= WG_VIOLIN_ARTICULATION_DETACHE &&
+        string->release_profile_articulation <= WG_VIOLIN_ARTICULATION_DETACHE
+        ? string->bow_lift_smoothing : string->bow_contact_release_smoothing;
+
     wg_violin_gesture_tick(string, sample_rate);
     string->bow_speed = wg_violin_smooth(
         string->bow_speed, string->bow_speed_target,
@@ -5806,8 +5812,7 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
     string->bow_contact = wg_violin_smooth(
         string->bow_contact, string->bow_contact_target,
         string->bow_contact_target > string->bow_contact ?
-            string->bow_contact_attack_smoothing :
-            string->bow_contact_release_smoothing);
+            string->bow_contact_attack_smoothing : contact_fall);
     string->bow_position = wg_violin_smooth(
         string->bow_position, string->bow_position_target,
         string->bow_position_smoothing);
@@ -6626,6 +6631,8 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
         string->bow_contact_default_attack_smoothing;
     string->bow_contact_release_smoothing =
         wg_violin_smoothing_coefficient(0.006, sample_rate);
+    string->bow_lift_smoothing =
+        wg_violin_smoothing_coefficient(0.002, sample_rate);
     string->bow_position_smoothing = wg_violin_smoothing_coefficient(
         0.005, sample_rate);
     string->bow_scratch_rise = wg_violin_smoothing_coefficient(

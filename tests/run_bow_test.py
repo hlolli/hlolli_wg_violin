@@ -735,19 +735,23 @@ def check_release(
 ) -> None:
     bow, rail = run_case(
         failures, "bow release", csound, module, csd,
-        {"TEST_CASE": 10, "TEST_END": 0.46}, (1, 2, 3), (1,))
-    if any(tag not in bow for tag in (1, 2, 3)) or 1 not in rail:
+        {"TEST_CASE": 10, "TEST_END": 0.46}, (1, 2, 3, 4), (1,))
+    if any(tag not in bow for tag in (1, 2, 3, 4)) or 1 not in rail:
         return
     for tag, state in bow.items():
         check_bow_common(failures, "release snapshot {}".format(tag), state)
     check_wave_common(failures, "bow release", rail[1])
     before = bow[1]
     early = bow[2]
-    late = bow[3]
+    late = bow[4]
     if bow_value(before, "contact") < 0.99:
         failures.append("bow release started without full contact")
     if not 0.1 < bow_value(early, "contact") < bow_value(before, "contact"):
         failures.append("bow release did not keep a decaying contact tail")
+    expected_contact = bow_value(early, "contact") * math.exp(-0.004 / 0.002)
+    if not math.isclose(bow_value(bow[3], "contact"), expected_contact,
+                        abs_tol=1.0e-6):
+        failures.append("bow lift did not use the 2 ms contact time constant")
     if bow_value(early, "requested_force") <= 0.0:
         failures.append("bow release cut force at the trigger edge")
     if bow_value(early, "state") == 0.0:
