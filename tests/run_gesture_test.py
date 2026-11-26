@@ -536,6 +536,39 @@ def check_handoffs(
                 failures.append("{} lost its stored rail".format(label))
 
 
+def check_bow_lift(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="hlolli-gesture-lift-") as folder:
+        for articulation in (0, 1):
+            tails = []
+            for change in (0, 1):
+                label = "bow lift articulation {} change {}".format(
+                    articulation, change)
+                gestures, _, _, _, audio = run_case(
+                    failures, label, csound, module, csd,
+                    {"TEST_CASE": 9, "TEST_ARTICULATION": articulation,
+                     "TEST_MOVE_AT_LIFT": change, "TEST_END": 0.46}, (1, 2, 3),
+                    output=Path(folder) / "lift-{}-{}.wav".format(
+                        articulation, change))
+                if audio is None or len(gestures) != 3:
+                    continue
+                before, lift, reattack = (gestures[tag] for tag in (1, 2, 3))
+                for field in ("force_output", "speed_output"):
+                    if not close(value(before, GESTURE_FIELDS, field),
+                                 value(lift, GESTURE_FIELDS, field)):
+                        failures.append("{} changed {} during lift".format(
+                            label, field))
+                if value(lift, GESTURE_FIELDS, "contact_output") != 0.0:
+                    failures.append("{} did not release bow contact".format(label))
+                if value(reattack, GESTURE_FIELDS, "speed_output") >= 0.0:
+                    failures.append("{} lost the next stroke's speed".format(label))
+                tails.append(stereo_window(audio[1], 0.201, 0.240))
+            if len(tails) == 2 and (tails[0] != tails[1] or rms(tails[0]) < 1.0):
+                failures.append("articulation {} changed or lost its lift tail"
+                                .format(articulation))
+
+
 def check_four_strings_and_body(
     failures: List[str], csound: Path, module: Path, csd: Path,
 ) -> None:
@@ -681,6 +714,7 @@ def main() -> int:
         failures, arguments.csound, arguments.module, arguments.csd)
     check_bow_changes_and_mode_changes(
         failures, arguments.csound, arguments.module, arguments.csd)
+    check_bow_lift(failures, arguments.csound, arguments.module, arguments.csd)
     check_handoffs(failures, arguments.csound, arguments.module, arguments.csd)
     check_four_strings_and_body(
         failures, arguments.csound, arguments.module, arguments.csd)

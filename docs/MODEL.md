@@ -37,6 +37,7 @@ handoff can therefore change opcode instances without restarting the string.
 An exact handoff must not overlap. Direct arco keeps bow state. Tremolo also
 keeps its stroke phase. A new bowed attack keeps the rails but rearms contact.
 A falling trigger releases contact and starts the chosen rail damping.
+An arco or détaché bow keeps its last speed and force while contact fades.
 Open strings played arco or détaché keep their normal rail losses and get
 1 percent of the added release damping. A stopped arco or détaché string
 holds its pitch when the controller or renderer asks to reopen it after

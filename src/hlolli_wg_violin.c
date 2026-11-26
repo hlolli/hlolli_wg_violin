@@ -3403,6 +3403,19 @@ static void wg_violin_gesture_tick(
 
   if (!string->gesture_active ||
       mode > WG_VIOLIN_ARTICULATION_TREMOLO) {
+    if (!string->release_gate_positive &&
+        mode <= WG_VIOLIN_ARTICULATION_DETACHE &&
+        string->release_profile_articulation <=
+            WG_VIOLIN_ARTICULATION_DETACHE &&
+        string->bow_contact > 1.0e-7) {
+      /* Keep the last bow drive while the hair leaves the string. */
+      string->gesture_contact_output = 0.0;
+      string->gesture_phase = 0.0;
+      string->gesture_transition_mix = 1.0;
+      string->gesture_bow_change_active = 0;
+      string->bow_contact_target = 0.0;
+      return;
+    }
     contact = 0.0;
     phase = 0.0;
   } else if (mode == WG_VIOLIN_ARTICULATION_DETACHE) {

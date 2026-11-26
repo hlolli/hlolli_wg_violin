@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep the outgoing bow drive as arco and détaché contact fades.
 - Shorten the Chaconne's slur pitch half-time to 1 ms.
 - Disable ALSA in the Csound build used for offline Linux CI tests.
 - Shape bow travel through long Chaconne notes and accept local bow

@@ -22,6 +22,9 @@
 #ifndef TEST_FAULT
 #define TEST_FAULT #1#
 #endif
+#ifndef TEST_MOVE_AT_LIFT
+#define TEST_MOVE_AT_LIFT #0#
+#endif
 
 sr = 48000
 ksmps = 32
@@ -73,6 +76,19 @@ instr BowChangeVoice
   aLeft, aRight hlolli_wg_violin \
       1, 440, 0.48, kSpeed, 0.12, \
       0, 0, 0, 0, 0, 3, p4
+  outs aLeft, aRight
+endin
+
+instr BowLiftVoice
+  kTime timeinsts
+  kGate = kTime < 0.20 || kTime >= 0.32 ? 1 : 0
+  kMoveBow = kTime >= 0.32 || (kTime >= 0.20 && $TEST_MOVE_AT_LIFT != 0) ? 1 : 0
+  kSpeed = kMoveBow == 0 ? 0.58 : -0.72
+  kForce = kMoveBow == 0 ? 0.52 : 0.81
+
+  aLeft, aRight hlolli_wg_violin \
+      kGate, 493.883301256124, kForce, kSpeed, 0.12, \
+      0, 0, $TEST_ARTICULATION, 0, 0, 3, p4
   outs aLeft, aRight
 endin
 
@@ -290,6 +306,11 @@ instr ScheduleTest
         giViolin, 3, $TEST_FAULT, 1
     event_i "i", "ProbeOne", 0.204, 0.001, 3, 2
     event_i "i", "ProbeOne", 0.300, 0.001, 3, 3
+  elseif $TEST_CASE == 9 then
+    event_i "i", "BowLiftVoice", 0, 0.45, giViolin
+    event_i "i", "ProbeOne", 0.190, 0.001, 3, 1
+    event_i "i", "ProbeOne", 0.205, 0.001, 3, 2
+    event_i "i", "ProbeOne", 0.380, 0.001, 3, 3
   endif
 endin
 
