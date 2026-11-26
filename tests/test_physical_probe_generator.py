@@ -131,14 +131,16 @@ class PhysicalProbeGeneratorTests(unittest.TestCase):
 
     def test_windows_library_directory_is_added_to_path(self) -> None:
         generator = load_generator()
-        with (
-            mock.patch.object(generator.sys, "platform", "win32"),
-            mock.patch.object(generator.os, "environ", {"PATH": "old-path"}),
-            mock.patch.object(
-                generator.subprocess, "run", side_effect=self.successful_render
-            ) as run,
-        ):
-            generator.run(self.arguments())
+        with mock.patch.object(generator.sys, "platform", "win32"):
+            with mock.patch.object(
+                generator.os, "environ", {"PATH": "old-path"}
+            ):
+                with mock.patch.object(
+                    generator.subprocess,
+                    "run",
+                    side_effect=self.successful_render,
+                ) as run:
+                    generator.run(self.arguments())
         expected = f"{self.library}{os.pathsep}old-path"
         for call in run.call_args_list:
             self.assertEqual(call.kwargs["env"]["PATH"], expected)

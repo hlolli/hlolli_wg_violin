@@ -115,6 +115,12 @@
           "type": "number",
           "minimum": 0.0,
           "maximum": 1.0
+        },
+        "stopped_finger_loss": {
+          "description": "Maximum extra divisor term for the stopped nut-side cutoff.",
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 4.0
         }
       }
     },
@@ -784,6 +790,17 @@
           "type": "number",
           "minimum": -1.0,
           "maximum": 1.0
+        },
+        "source_gains": {
+          "description": "Relative bridge-force gains from the G, D, A, and E strings.",
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 4.0
+          }
         }
       }
     },

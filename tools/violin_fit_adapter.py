@@ -216,6 +216,7 @@ def build_renderer(csound: Path, module: Path, library_path: Path | None,
     if len(matches) != 1:
         raise AdapterError("renderer source marker changed")
     files = {"csound": csound, "module": module, "csd": regular(CSD, "CSD")}
+    parameters = load_json(FIT_MANIFEST)["parameters"]
     config = {
         "adapter_id": "hlolli-wg-violin-v1",
         "files": {
@@ -223,14 +224,8 @@ def build_renderer(csound: Path, module: Path, library_path: Path | None,
             for name, path in files.items()
         },
         "library_path": str(library_path) if library_path is not None else None,
-        "baseline": {
-            "body_wet_gain": 0.45,
-            "bridge_cutoff_g_hz": 5386.995271806526,
-            "bridge_cutoff_d_hz": 4964.244281108786,
-            "bridge_cutoff_a_hz": 7086.471045764144,
-            "bridge_cutoff_e_hz": 6024.580442039031,
-        },
-        "parameters": load_json(FIT_MANIFEST)["parameters"],
+        "baseline": {row["id"]: row["baseline"] for row in parameters},
+        "parameters": parameters,
         "cases": {
             "open-g3": {"mode": "open", "string": 1, "frequency": 195.997717990875},
             "open-d4": {"mode": "open", "string": 2, "frequency": 293.664767917408},

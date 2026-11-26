@@ -39,6 +39,32 @@ opcode HlolBachStrokeShape, kkk, ki
   xout kContact, kForce, kSpeed
 endop
 
+opcode HlolBachBowTravel, k, kiiiii
+  kElapsed, iOffset, iSpan, iJoined, iSlope, iBend xin
+  kTravel = 1
+  if iSpan > 0 then
+    kPhase limit (iOffset + kElapsed) / iSpan, 0, 1
+    if iJoined != 0 then
+      kX = 2 * kPhase - 1
+      kDb limit iSlope * kX + iBend * (2 * kX * kX - 0.6666666667), -4, 4
+      kTravel = exp(log(10) * kDb / 20)
+    else
+      iDepth limit (iSpan - 0.22) / 0.48, 0, 1
+      if kPhase < 0.42 then
+        kShape = kPhase / 0.42
+        kShape = kShape * kShape * (3 - 2 * kShape)
+        kSpeed = 0.88 + 0.36 * kShape
+      else
+        kShape = (kPhase - 0.42) / 0.58
+        kShape = kShape * kShape * (3 - 2 * kShape)
+        kSpeed = 1.24 - 0.58 * kShape
+      endif
+      kTravel = 1 + iDepth * (kSpeed - 1)
+    endif
+  endif
+  xout kTravel
+endop
+
 opcode HlolBachChordContact, k, iiii
   iDuration, iChordSize, iChordRank, iLead xin
   if iChordSize <= 1 then

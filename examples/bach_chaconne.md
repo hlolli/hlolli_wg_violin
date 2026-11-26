@@ -19,9 +19,49 @@ Positive bow speed is a down bow. Negative speed is an up bow. Each
 non-slurred bow group starts one shared stroke a few milliseconds before its
 written attack. Bow speed crosses through zero at the change, while string
 contact and stored motion stay alive. Down and up strokes use different force,
-speed, and contact points.
+speed, and contact points. Shorter stopped strings get a larger bow-position
+fraction so the physical distance to the bridge shrinks more slowly.
+The score raises the bow-force control by 5 percent on single notes and
+double stops.
+
+The default `INFINITE_BOW=1` adds 256 continuous phrases, joining 817 note
+boundaries in bars 33–56, 65–88, 121–124, 153–164, 217–228, and 241–248.
+This is a performance choice that allows unlimited bow travel. It applies to
+single-voice passages on one physical string. Rest gaps, string changes,
+chords, and dotted short notes stop an added join. Added phrases use four-bar
+groups and can cross barlines; they never split an existing written slur.
+Repeated pitches within a phrase sustain without a new attack.
+
+Each phrase holds its direction and contact independently of the shared stroke
+events. Its first note uses direct arco with a fresh attack; later notes keep
+the bow and vibrato state. Dynamics still move, with a 10 ms smoothing half-time.
+Only phrase starts and ends lower the gate for one control block. Joined notes
+keep a positive gate. At release, these phrases keep the stopped tail's pitch
+and let the body ring. With sympathetic response enabled, other notes wait
+160 ms before retuning to the open string. A new note on the same string
+cancels that retune. Mechanical bursts remain on in the public score.
+
+Set `INFINITE_BOW=0` to turn off the added joins:
+
+```sh
+cmake -DSTART_BAR=73 -DINFINITE_BOW=0 -P build/play_bach_chaconne.cmake
+```
+
+The optional phrase map lives in `bach_chaconne_phrases.inc`. Regenerate and
+check it with `python3 -B tools/generate_bach_phrases.py` and the same command
+with `--check`. The written note and stroke lists remain unchanged.
+
+Long single-note bows gather speed and then slow toward release. As speed
+increases, the bow moves slightly closer to the bridge. The phrase map also
+tracks elapsed time across joined notes at the demo tempo. An optional bow
+guide can use that time to shape each joined stroke. Its
+`giBachBowSlope[id]` and `giBachBowBend[id]` values are in decibels, keyed by
+the span's first gesture ID. Playback loads an explicit `BACH_BOW_GUIDE` path
+or the local `hlolli/bach_chaconne_bow_guide.inc` when present. Use
+`-DBACH_BOW_GUIDE=` to play without the local guide.
+
 Chord strokes add a small push near the middle and unload without dropping the
-lead voice. Single-note strokes keep even bow input. Across all 487 written
+lead voice. Across all 487 written
 chord onsets, contact moves from the lower bow plane to the upper one over as
 much as 650 ms. The span scales with the written note length. On long chords,
 the lower plane remains bowed through the turn and overlaps the upper attack
@@ -46,9 +86,9 @@ pitch source owns the motion. The measured ranges and style limits behind this
 plan are in `../docs/research/violin-vibrato-performance.md`.
 
 The first four bars follow the measured phrase spans of the private reference:
-2.350, 4.025, 4.005, and 2.995 seconds. Their bow contact stays near 0.15 of
-the string length, which cuts the excess high-band energy without output EQ.
-Later sections retain their prior contact points.
+2.350, 4.025, 4.005, and 2.995 seconds. The base bow contact stays near 0.15
+of the string length in the opening. The direct level defaults to 0.38 on G
+and 0.50 on the other strings.
 
 Play the demo after building:
 
@@ -106,6 +146,7 @@ csound \
   --omacro:SYMPATHETIC_LEVEL=0.35 \
   --omacro:VIOLIN_REFERENCE_PITCH=442 \
   --omacro:VIBRATO_LEVEL=1 \
+  --omacro:INFINITE_BOW=1 \
   --omacro:VIOLIN_DISTANCE_METERS=2.5 \
   --omacro:ROOM_LEVEL=0.05 \
   examples/bach_chaconne.csd

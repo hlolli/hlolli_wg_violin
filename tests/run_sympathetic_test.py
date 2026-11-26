@@ -786,9 +786,9 @@ def check_stopped_release(
     with tempfile.TemporaryDirectory(prefix="hlolli-sympathetic-release-") as folder:
         result = run_case(
             failures, "sympathetic-string stopped release", csound, module, csd,
-            {"TEST_CASE": 8, "TEST_END": 0.62,
+            {"TEST_CASE": 8, "TEST_END": 0.72,
              "TEST_SYMPATHETIC": 1},
-            (1,), (1,), (1,), (1,),
+            (1, 2, 3), (1,), (1,), (1,),
             Path(folder) / "stopped-release.wav")
     check_common(
         failures, "sympathetic-string stopped release", result[0], result[2],
@@ -808,6 +808,32 @@ def check_stopped_release(
         failures.append("stopped-note energy survived the open retune")
     if abs(value(wave, WAVE_FIELDS, "last_bridge_output")) >= 0.05:
         failures.append("stopped-note bridge tail survived the open retune")
+    check_reopen_pitch(failures, "unowned string", result[0], 2, 3)
+
+
+def check_reopen_pitch(
+    failures: List[str], label: str, waves: Dict[int, State],
+    stopped_tag: int, open_tag: int,
+) -> None:
+    for tag, pitch in ((stopped_tag, 293.664767917408),
+                       (open_tag, 195.997717990875)):
+        if tag in waves:
+            actual = value(waves[tag], WAVE_FIELDS, "target_frequency")
+            if abs(actual - pitch) > 0.001:
+                failures.append(f"{label} expected {pitch:.3f} Hz, got {actual:.3f} Hz")
+
+
+def check_owned_reopen(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    for variant, label, open_tag in (
+            (0, "owned string release", 3),
+            (1, "owned string reattack", 2)):
+        result = run_case(
+            failures, label, csound, module, csd,
+            {"TEST_CASE": 12, "TEST_VARIANT": variant, "TEST_END": 0.73},
+            wave_tags=(1, open_tag))
+        check_reopen_pitch(failures, label, result[0], 1, open_tag)
 
 
 def check_faults(
@@ -958,6 +984,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     check_handoffs(failures, options.csound, options.module, options.csd)
     check_gap(failures, options.csound, options.module, options.csd)
     check_stopped_release(
+        failures, options.csound, options.module, options.csd)
+    check_owned_reopen(
         failures, options.csound, options.module, options.csd)
     check_faults(failures, options.csound, options.module, options.csd)
     check_stress(failures, options.csound, options.module, options.csd)

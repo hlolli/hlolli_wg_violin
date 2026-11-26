@@ -41,6 +41,7 @@ class PlaybackPlan:
     muted_preroll_seconds: float
     vibrato_level: float
     distance_meters: float
+    infinite_bow: bool
     performance_include: str
     mode: str
     output: str | None
@@ -204,7 +205,9 @@ def build_plan(csound: Path, module: Path, csd: Path, score: Path,
                start_bar: int, output: Path | None,
                rendered_output: Path | None = None,
                vibrato_level: float = 1.0,
-               distance_meters: float = 2.5) -> PlaybackPlan:
+               distance_meters: float = 2.5,
+               infinite_bow: bool = True,
+               bow_guide: Path | None = None) -> PlaybackPlan:
     if not 1 <= start_bar <= EXPECTED_BARS:
         raise ValueError("start bar must be an integer from 1 through 257")
     if not math.isfinite(vibrato_level) or not 0 <= vibrato_level <= 2:
@@ -230,8 +233,13 @@ def build_plan(csound: Path, module: Path, csd: Path, score: Path,
         "--num-threads=1",
         f"--omacro:VIBRATO_LEVEL={format_number(vibrato_level)}",
         f"--omacro:VIOLIN_DISTANCE_METERS={format_number(distance_meters)}",
+        f"--omacro:INFINITE_BOW={int(infinite_bow)}",
         f"--smacro:BACH_PERFORMANCE={performance_include}",
     ]
+    if bow_guide is not None:
+        if not bow_guide.is_file():
+            raise ValueError(f"bow guide file does not exist: {bow_guide}")
+        argv.append(f"--omacro:BACH_BOW_GUIDE={bow_guide}")
     if output is None:
         argv.append("-odac")
         mode = "realtime"
@@ -248,6 +256,7 @@ def build_plan(csound: Path, module: Path, csd: Path, score: Path,
         muted_preroll_seconds=bar_seconds - stroke_seconds,
         vibrato_level=vibrato_level,
         distance_meters=distance_meters,
+        infinite_bow=infinite_bow,
         performance_include=str(performance_include),
         mode=mode,
         output=str(output) if output is not None else None,
@@ -272,31 +281,31 @@ def short_temporary_root() -> Path:
 def trim_leading_silence(source: Path, destination: Path) -> None:
     temporary = temporary_path(destination.parent, destination.name + ".trim")
     try:
-        with (wave.open(str(source), "rb") as reader,
-              wave.open(str(temporary), "wb") as writer):
-            parameters = reader.getparams()
-            if (parameters.nchannels, parameters.sampwidth,
-                    parameters.framerate, parameters.comptype) != (
-                        2, 3, 48000, "NONE"):
-                raise ValueError("Csound rendered the wrong WAVE shape")
-            writer.setparams(parameters)
-            frame_bytes = parameters.nchannels * parameters.sampwidth
-            zero = bytes(frame_bytes)
-            found = False
-            while True:
-                frames = reader.readframes(8192)
-                if not frames:
-                    break
-                first = 0
+        with wave.open(str(source), "rb") as reader:
+            with wave.open(str(temporary), "wb") as writer:
+                parameters = reader.getparams()
+                if (parameters.nchannels, parameters.sampwidth,
+                        parameters.framerate, parameters.comptype) != (
+                            2, 3, 48000, "NONE"):
+                    raise ValueError("Csound rendered the wrong WAVE shape")
+                writer.setparams(parameters)
+                frame_bytes = parameters.nchannels * parameters.sampwidth
+                zero = bytes(frame_bytes)
+                found = False
+                while True:
+                    frames = reader.readframes(8192)
+                    if not frames:
+                        break
+                    first = 0
+                    if not found:
+                        while (first < len(frames)
+                               and frames[first:first + frame_bytes] == zero):
+                            first += frame_bytes
+                        found = first < len(frames)
+                    if found:
+                        writer.writeframesraw(frames[first:])
                 if not found:
-                    while (first < len(frames)
-                           and frames[first:first + frame_bytes] == zero):
-                        first += frame_bytes
-                    found = first < len(frames)
-                if found:
-                    writer.writeframesraw(frames[first:])
-            if not found:
-                raise ValueError("Csound rendered a silent WAVE file")
+                    raise ValueError("Csound rendered a silent WAVE file")
         os.replace(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
@@ -325,7 +334,9 @@ def run(options: argparse.Namespace) -> int:
             csound, module, csd, score, performance, performance_include,
             options.start_bar, output, rendered,
             vibrato_level=options.vibrato_level,
-            distance_meters=options.distance_meters)
+            distance_meters=options.distance_meters,
+            infinite_bow=bool(options.infinite_bow),
+            bow_guide=options.bow_guide.resolve() if options.bow_guide else None)
         if options.plan_only:
             print(json.dumps(asdict(plan), indent=2))
             return 0
@@ -369,6 +380,8 @@ def main() -> int:
     parser.add_argument("--start-bar", type=int, default=1)
     parser.add_argument("--vibrato-level", type=float, default=1.0)
     parser.add_argument("--distance-meters", type=float, default=2.5)
+    parser.add_argument("--infinite-bow", type=int, choices=(0, 1), default=1)
+    parser.add_argument("--bow-guide", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--plan-only", action="store_true")
     options = parser.parse_args()

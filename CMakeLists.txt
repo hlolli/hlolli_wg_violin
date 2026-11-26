@@ -143,6 +143,8 @@ endif()
 if(NOT HLOLLI_CSOUND_INCLUDE_DIR
     AND NOT _hlolli_csound_split_include_dirs
     AND NOT _hlolli_csound_header_target)
+  unset(HLOLLI_CSOUND_INCLUDE_DIR CACHE)
+  unset(HLOLLI_CSOUND_INCLUDE_DIR)
   find_path(HLOLLI_CSOUND_INCLUDE_DIR
     NAMES csdl.h
     HINTS
@@ -152,7 +154,8 @@ if(NOT HLOLLI_CSOUND_INCLUDE_DIR
       "$ENV{HOME}/Library/Frameworks/CsoundLib64.framework/Headers"
       "/Library/Frameworks/CsoundLib64.framework/Headers"
       "/Applications/Csound/CsoundLib64.framework/Headers"
-    PATH_SUFFIXES csound Headers)
+    PATH_SUFFIXES csound Headers
+    DOC "Installed include directory containing all public and version headers")
 endif()
 
 set(_hlolli_csound_version_header "")
@@ -344,8 +347,10 @@ if(HLOLLI_WG_VIOLIN_INSTALL)
     "${CMAKE_CURRENT_LIST_DIR}/examples/solo_techniques.csd"
     "${CMAKE_CURRENT_LIST_DIR}/examples/string_section.csd"
     "${CMAKE_CURRENT_LIST_DIR}/examples/wasm_smoke.csd"
+    "${CMAKE_CURRENT_LIST_DIR}/examples/infinite_bow.csd"
     "${CMAKE_CURRENT_LIST_DIR}/examples/bach_chaconne.csd"
     "${CMAKE_CURRENT_LIST_DIR}/examples/bach_chaconne_performance.inc"
+    "${CMAKE_CURRENT_LIST_DIR}/examples/bach_chaconne_phrases.inc"
     "${CMAKE_CURRENT_LIST_DIR}/examples/bach_chaconne_stroke.inc"
     "${CMAKE_CURRENT_LIST_DIR}/examples/bach_chaconne_score.inc"
     "${CMAKE_CURRENT_LIST_DIR}/examples/violin_distance.inc"
@@ -357,7 +362,10 @@ endif()
 
 set(CSOUND_EXECUTABLE "" CACHE FILEPATH "Path to the Csound executable")
 if(NOT CSOUND_EXECUTABLE)
-  find_program(CSOUND_EXECUTABLE NAMES csound csound64)
+  unset(CSOUND_EXECUTABLE CACHE)
+  unset(CSOUND_EXECUTABLE)
+  find_program(CSOUND_EXECUTABLE NAMES csound csound64
+    DOC "Path to the Csound executable")
 endif()
 set(HLOLLI_ST_NICOLAES_IR
     "$ENV{HOME}/Downloads/IMReverbs/St Nicolaes Church.wav"
@@ -478,11 +486,61 @@ if(CSOUND_EXECUTABLE)
     VERBATIM)
 endif()
 
+set(HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR "" CACHE PATH
+    "Optional analyzer tools directory for adapter tests")
+set(HLOLLI_WG_VIOLIN_ANALYZER_EXECUTABLE "" CACHE FILEPATH
+    "Optional analyzer executable for the full adapter fit test")
+if(HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR)
+  foreach(_hlolli_helper IN ITEMS instrument_fit.py analyzer_evidence.py)
+    if(NOT EXISTS "${HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR}/${_hlolli_helper}")
+      message(FATAL_ERROR "Analyzer tools directory lacks ${_hlolli_helper}")
+    endif()
+  endforeach()
+endif()
+if(HLOLLI_WG_VIOLIN_ANALYZER_EXECUTABLE)
+  if(NOT HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR OR
+      NOT EXISTS "${HLOLLI_WG_VIOLIN_ANALYZER_EXECUTABLE}")
+    message(FATAL_ERROR "Analyzer tests need an executable and tools directory")
+  endif()
+endif()
+
 option(HLOLLI_WG_VIOLIN_BUILD_TESTS "Add the native Csound tests"
        ${_hlolli_wg_violin_top_level})
 if(HLOLLI_WG_VIOLIN_BUILD_TESTS)
   enable_testing()
+  if(NOT WIN32 AND Python3_Interpreter_FOUND AND
+      HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR)
+    set(_hlolli_adapter_args
+      "--analyzer-tools-dir=${HLOLLI_WG_VIOLIN_ANALYZER_TOOLS_DIR}")
+    if(HLOLLI_WG_VIOLIN_ANALYZER_EXECUTABLE)
+      list(APPEND _hlolli_adapter_args
+        "--analyzer=${HLOLLI_WG_VIOLIN_ANALYZER_EXECUTABLE}")
+    endif()
+    add_test(NAME hlolli_wg_violin.analyzer_adapter
+      COMMAND "${Python3_EXECUTABLE}" -B
+        "${CMAKE_CURRENT_LIST_DIR}/tests/test_analyzer_adapter.py"
+        ${_hlolli_adapter_args})
+    set_tests_properties(hlolli_wg_violin.analyzer_adapter PROPERTIES
+      LABELS "analyzer;tooling;fit" TIMEOUT 240)
+  endif()
   if(Python3_Interpreter_FOUND)
+    add_test(NAME hlolli_wg_violin.wasm_source_preparation
+      COMMAND "${Python3_EXECUTABLE}" -B
+              "${CMAKE_CURRENT_LIST_DIR}/tests/test_prepare_wasm_source.py")
+    set_tests_properties(hlolli_wg_violin.wasm_source_preparation PROPERTIES
+      LABELS "wasm;tooling" TIMEOUT 30)
+
+    add_test(NAME hlolli_wg_violin.cmake_discovery
+      COMMAND "${Python3_EXECUTABLE}" -B
+              "${CMAKE_CURRENT_LIST_DIR}/tests/run_cmake_discovery_test.py"
+              --cmake "${CMAKE_COMMAND}"
+              --source-dir "${CMAKE_CURRENT_LIST_DIR}"
+              --generator "${CMAKE_GENERATOR}"
+              --make-program "${CMAKE_MAKE_PROGRAM}"
+              --compiler "${CMAKE_C_COMPILER}")
+    set_tests_properties(hlolli_wg_violin.cmake_discovery PROPERTIES
+      LABELS "build;tooling" TIMEOUT 60)
+
     add_test(NAME hlolli_wg_violin.body_mode_fit
       COMMAND "${Python3_EXECUTABLE}" -B
               "${CMAKE_CURRENT_LIST_DIR}/tools/fit_body_modes.py"
@@ -578,6 +636,21 @@ if(HLOLLI_WG_VIOLIN_BUILD_TESTS)
       TIMEOUT 30)
 
     if(Python3_Interpreter_FOUND)
+      if(HLOLLI_WG_VIOLIN_INSTALL
+          AND NOT IS_ABSOLUTE "${CMAKE_INSTALL_DATAROOTDIR}")
+        add_test(NAME hlolli_wg_violin.installed_examples
+          COMMAND "${Python3_EXECUTABLE}" -B
+                  "${CMAKE_CURRENT_LIST_DIR}/tests/run_installed_examples_test.py"
+                  --cmake "${CMAKE_COMMAND}"
+                  --build-dir "${CMAKE_CURRENT_BINARY_DIR}"
+                  --data-dir "${CMAKE_INSTALL_DATAROOTDIR}"
+                  --config "$<CONFIG>"
+                  --csound "${CSOUND_EXECUTABLE}"
+                  --module "$<TARGET_FILE:hlolli_wg_violin>")
+        set_tests_properties(hlolli_wg_violin.installed_examples PROPERTIES
+          LABELS "api;demo;install" RUN_SERIAL TRUE TIMEOUT 60)
+      endif()
+
       add_test(NAME hlolli_wg_violin.bach_chaconne_score
         COMMAND "${Python3_EXECUTABLE}"
                 -B
@@ -587,6 +660,20 @@ if(HLOLLI_WG_VIOLIN_BUILD_TESTS)
       set_tests_properties(hlolli_wg_violin.bach_chaconne_score PROPERTIES
         LABELS "demo"
         TIMEOUT 30)
+
+      add_test(NAME hlolli_wg_violin.bach_phrase_data
+        COMMAND "${Python3_EXECUTABLE}" -B
+                "${CMAKE_CURRENT_LIST_DIR}/tools/generate_bach_phrases.py" --check)
+      set_tests_properties(hlolli_wg_violin.bach_phrase_data PROPERTIES
+        LABELS "demo;legato" TIMEOUT 30)
+
+      add_test(NAME hlolli_wg_violin.bach_phrases
+        COMMAND "${Python3_EXECUTABLE}" -B
+                "${CMAKE_CURRENT_LIST_DIR}/tests/run_bach_phrase_test.py"
+                --csound "${CSOUND_EXECUTABLE}"
+                --module "$<TARGET_FILE:hlolli_wg_violin>")
+      set_tests_properties(hlolli_wg_violin.bach_phrases PROPERTIES
+        LABELS "demo;legato;bow" TIMEOUT 60)
 
       add_test(NAME hlolli_wg_violin.bach_stroke_shape
         COMMAND "${Python3_EXECUTABLE}"
@@ -861,6 +948,14 @@ if(HLOLLI_WG_VIOLIN_BUILD_TESTS)
         RUN_SERIAL TRUE
         TIMEOUT 120)
 
+      add_test(NAME hlolli_wg_violin.infinite_bow
+        COMMAND "${Python3_EXECUTABLE}" -B
+                "${CMAKE_CURRENT_LIST_DIR}/tests/run_infinite_bow_test.py"
+                --csound "${CSOUND_EXECUTABLE}"
+                --module "$<TARGET_FILE:hlolli_wg_violin_test>")
+      set_tests_properties(hlolli_wg_violin.infinite_bow PROPERTIES
+        LABELS "legato;string;bow" RUN_SERIAL TRUE TIMEOUT 120)
+
       add_test(NAME hlolli_wg_violin.exciters
         COMMAND "${Python3_EXECUTABLE}"
                 -B
@@ -963,6 +1058,29 @@ if(HLOLLI_WG_VIOLIN_BUILD_TESTS)
         TIMEOUT 180)
 
       if(TARGET hlolli_wg_violin_check_wasm)
+        add_custom_target(hlolli_wg_violin_check_infinite_bow_wasm
+          COMMAND "${HLOLLI_BUN_EXECUTABLE}"
+                  "${CMAKE_CURRENT_LIST_DIR}/tools/run_wasm_workbench_test.ts"
+                  --compiler-root "${HLOLLI_WG_VIOLIN_WORKBENCH_DIR}"
+                  --source "${_hlolli_wasm_source}"
+                  --csd "${CMAKE_CURRENT_LIST_DIR}/examples/infinite_bow.csd"
+                  --output "${CMAKE_CURRENT_BINARY_DIR}/wasm/phrase.json"
+                  --pcm-output "${CMAKE_CURRENT_BINARY_DIR}/wasm/phrase.f64"
+          COMMAND "${Python3_EXECUTABLE}" -B
+                  "${CMAKE_CURRENT_LIST_DIR}/tests/compare_wasm_pcm.py"
+                  --csound "${CSOUND_EXECUTABLE}"
+                  --module "$<TARGET_FILE:hlolli_wg_violin>"
+                  --csd "${CMAKE_CURRENT_LIST_DIR}/examples/infinite_bow.csd"
+                  --browser-pcm "${CMAKE_CURRENT_BINARY_DIR}/wasm/phrase.f64"
+                  --browser-facts "${CMAKE_CURRENT_BINARY_DIR}/wasm/phrase.json"
+          DEPENDS hlolli_wg_violin hlolli_wg_violin_prepare_wasm_source
+          WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}"
+          USES_TERMINAL VERBATIM)
+        add_test(NAME hlolli_wg_violin.infinite_bow_wasm
+          COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_CURRENT_BINARY_DIR}"
+                  --target hlolli_wg_violin_check_infinite_bow_wasm)
+        set_tests_properties(hlolli_wg_violin.infinite_bow_wasm PROPERTIES
+          LABELS "legato;wasm;browser" RUN_SERIAL TRUE TIMEOUT 180)
         add_test(NAME hlolli_wg_violin.release_wasm
           COMMAND "${HLOLLI_BUN_EXECUTABLE}"
                   "${CMAKE_CURRENT_LIST_DIR}/tools/run_wasm_workbench_test.ts"

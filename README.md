@@ -110,9 +110,18 @@ Read [docs/MODEL.md](docs/MODEL.md) for the state and signal rules. Read
 | `examples/solo_techniques.csd` | Focused solo techniques |
 | `examples/string_section.csd` | Four separate violin handles |
 | `examples/bach_chaconne.csd` | Full Chaconne with bar-start playback |
+| `examples/infinite_bow.csd` | Four strings with continuous same-string phrases |
 | `examples/paganini_caprice_24.csd` | Full Caprice No. 24 |
 | `examples/wasm_smoke.csd` | Browser build smoke test |
 
+## Analysis and fitting
+
+The [checked analyzer adapter](tools/analyzer_adapter/README.md) builds private
+fit bundles and tests them through the shared analyzer. Its tools path is
+explicit, so the two checkouts need not sit next to each other.
+
 ## License
 
-GPL-3.0-only. See [LICENSE](LICENSE).
+GPL-3.0-only. See [LICENSE](LICENSE). The checked analyzer adapter and
+`tests/test_analyzer_adapter.py` retain their
+[MIT license](tools/analyzer_adapter/LICENSE).

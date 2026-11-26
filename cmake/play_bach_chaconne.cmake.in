@@ -7,6 +7,14 @@ endif()
 if(NOT DEFINED DISTANCE_METERS)
   set(DISTANCE_METERS 2.5)
 endif()
+if(NOT DEFINED INFINITE_BOW)
+  set(INFINITE_BOW 1)
+endif()
+if(NOT DEFINED BACH_BOW_GUIDE AND
+    EXISTS "@CMAKE_CURRENT_SOURCE_DIR@/hlolli/bach_chaconne_bow_guide.inc")
+  set(BACH_BOW_GUIDE
+      "@CMAKE_CURRENT_SOURCE_DIR@/hlolli/bach_chaconne_bow_guide.inc")
+endif()
 if(DEFINED OUTPUT AND NOT OUTPUT STREQUAL "" AND NOT IS_ABSOLUTE "${OUTPUT}")
   message(FATAL_ERROR "OUTPUT must be an absolute path")
 endif()
@@ -33,7 +41,11 @@ set(_command
     "@CMAKE_CURRENT_SOURCE_DIR@/examples/bach_chaconne_performance.inc"
     --start-bar "${START_BAR}"
     --vibrato-level "${VIBRATO_LEVEL}"
-    --distance-meters "${DISTANCE_METERS}")
+    --distance-meters "${DISTANCE_METERS}"
+    --infinite-bow "${INFINITE_BOW}")
+if(DEFINED BACH_BOW_GUIDE AND NOT BACH_BOW_GUIDE STREQUAL "")
+  list(APPEND _command --bow-guide "${BACH_BOW_GUIDE}")
+endif()
 if(DEFINED OUTPUT AND NOT OUTPUT STREQUAL "")
   list(APPEND _command --output "${OUTPUT}")
 endif()

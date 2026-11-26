@@ -719,10 +719,13 @@ def check_release_decay(
     with tempfile.TemporaryDirectory(prefix="hlolli-release-decay-") as folder:
         temporary = Path(folder)
         for label, mode, speed, time_to_60_db in settings:
+            frequency = 440.0 * 2.0 ** (1.0 / 12.0) if mode in (0, 1) else 440.0
             result = run_case(
                 failures, label + " release", csound, module, csd,
                 {"TEST_CASE": 8, "TEST_MODE": mode, "TEST_SPEED": speed,
-                 "TEST_NOTE_OFF": note_off, "TEST_END": 0.64},
+                 "TEST_NOTE_OFF": note_off, "TEST_END": 0.64,
+                 "TEST_ATTACK_FREQUENCY": frequency,
+                 "TEST_RELEASE_FREQUENCY": frequency},
                 (1,), (1, 2, 3, 4, 5),
                 output=temporary / (label.replace(" ", "-") + ".wav"))
             exciters, waves, _, _, _, rendered = result
@@ -823,6 +826,28 @@ def release_energy_ratios(waves: Mapping[int, State]) -> Tuple[float, ...]:
         return ()
     return tuple(rail_energy(waves[tag]) / reference
                  for tag in (2, 3, 4, 5))
+
+
+def check_open_bow_release(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    tags = (1, 2, 3, 4, 5)
+    for label, mode in (("open arco", 0), ("open detache", 1)):
+        _, waves, _, _, _, _ = run_case(
+            failures, label, csound, module, csd,
+            {"TEST_CASE": 8, "TEST_MODE": mode, "TEST_SPEED": 0.55,
+             "TEST_NOTE_OFF": 0.12, "TEST_END": 0.64},
+            (1,), tags)
+        if any(tag not in waves for tag in tags):
+            continue
+        for tag in tags:
+            check_wave_common(failures, f"{label} release snapshot {tag}", waves[tag])
+        ratios = release_energy_ratios(waves)
+        if not ratios or not (0.02 < ratios[2] < 0.10 and
+                              0.0 < ratios[3] < 0.01):
+            failures.append(f"{label} had unexpected release energy ratios {ratios}")
+        if any(newer >= older for older, newer in zip(ratios, ratios[1:])):
+            failures.append(f"{label} release energy did not fall steadily")
 
 
 def check_release_pitch_and_profile(
@@ -1016,6 +1041,8 @@ def main() -> int:
     check_handle_isolation(
         failures, arguments.csound, arguments.module, arguments.csd)
     check_release_decay(
+        failures, arguments.csound, arguments.module, arguments.csd)
+    check_open_bow_release(
         failures, arguments.csound, arguments.module, arguments.csd)
     check_release_pitch_and_profile(
         failures, arguments.csound, arguments.module, arguments.csd)

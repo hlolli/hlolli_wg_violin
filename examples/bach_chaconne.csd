@@ -8,7 +8,7 @@
 #define MODEL_LEVEL #0.88#
 #endif
 #ifndef DIRECT_LEVEL
-#define DIRECT_LEVEL #1.00#
+#define DIRECT_LEVEL #0.50#
 #endif
 #ifndef BODY_LEVEL
 #define BODY_LEVEL #0.92#
@@ -33,6 +33,9 @@
 #endif
 #ifndef VIOLIN_DISTANCE_METERS
 #define VIOLIN_DISTANCE_METERS #2.5#
+#endif
+#ifndef INFINITE_BOW
+#define INFINITE_BOW #1#
 #endif
 
 sr = 48000
@@ -107,11 +110,21 @@ endop
 giTinyRoomIR TinyRoomIR
 
 #include "bach_chaconne_stroke.inc"
+#include "bach_chaconne_phrases.inc"
+giBachBowSlope[] init lenarray(giBachBowSpan)
+giBachBowBend[] init lenarray(giBachBowSpan)
+#ifdef BACH_BOW_GUIDE
+#includestr "$BACH_BOW_GUIDE"
+#endif
+gkPhrase[] init 5
+giActivePhrase[] init 5
+giActivePhraseEnd[] init 5
 
 gkGestureId[] init 5
 gkTrigger[] init 5
 gkFrequency[] init 5
 gkDynamic[] init 5
+gkBowTravel[] fillarray 1, 1, 1, 1, 1
 gkChordSize[] init 5
 gkChordRank[] init 5
 gkChordContact[] init 5
@@ -212,10 +225,20 @@ instr BachNote
   iLead = int(p15)
   iChordRank = int(p16)
   iDottedShort = int(p17)
+  iPhrase = $INFINITE_BOW != 0 ? giBachPhrase[iGestureId] : 0
+  iContinuation = iPhrase != 0 && giActivePhrase[iString] == iPhrase && \
+      abs(giActivePhraseEnd[iString] - p2) < 0.5 / sr ? 1 : 0
+  giActivePhrase[iString] = iPhrase
+  giActivePhraseEnd[iString] = p2 + p3
+  iJoinNext = iPhrase != 0 ? giBachJoinNext[iGestureId] : 0
 
   iArticulation = 1
   if iLegato != 0 then
     iArticulation = 0
+  endif
+  if iPhrase != 0 then
+    iArticulation = 0
+    iLegato = 1
   endif
   iTriggerLevel = 0.42 + 0.58 * iDynamic
 
@@ -243,16 +266,36 @@ instr BachNote
     kVibratoRate init 0
   endif
 
+  if iContinuation != 0 then
+    kVibratoDepth = iVibratoDepth
+    kVibratoRate = iVibratoRate
+  endif
+
   kChordContact HlolBachChordContact \
       p3, iChordSize, iChordRank, iLead
+  iBowSpan = giBachBowSpan[iGestureId]
+  if iPhrase == 0 && giBachPhrase[iGestureId] != 0 then
+    iBowSpan = 0
+  endif
+  kElapsed timeinsts
+  kBowTravel HlolBachBowTravel kElapsed, giBachBowElapsed[iGestureId], \
+      giBachBowDuration[iBowSpan], giBachBowJoined[iBowSpan], \
+      giBachBowSlope[iBowSpan], giBachBowBend[iBowSpan]
 
   gkGestureId[iString] = iGestureId
   ; BachStroke owns the shared bow sign. Held notes must not write an older
   ; direction after a new stroke has started.
   if gkGestureId[iString] == iGestureId then
     gkTrigger[iString] = iTriggerLevel
+    ; Only phrase attacks and ends release contact for one block.
+    if iPhrase != 0 && ((iContinuation == 0 && timeinstk() == 1) || \
+        (iJoinNext == 0 && timeinsts() >= p3 - ksmps / sr)) then
+      gkTrigger[iString] = 0
+    endif
+    gkPhrase[iString] = iPhrase
     gkFrequency[iString] = cpsmidinn(iMidi) * giReferenceRatio
     gkDynamic[iString] = iDynamic
+    gkBowTravel[iString] = kBowTravel
     gkChordSize[iString] = iChordSize
     gkChordRank[iString] = iChordRank
     gkChordContact[iString] = kChordContact
@@ -266,7 +309,7 @@ instr BachNote
     gkDottedShort[iString] = iDottedShort
   endif
   event_i "i", "BachOff", p3 + ksmps / sr, 0.001, \
-      iString, iGestureId
+      iString, iGestureId, iPhrase
 endin
 
 instr BachOff
@@ -275,11 +318,19 @@ instr BachOff
   if gkGestureId[iString] == iGestureId then
     gkTrigger[iString] = 0
     gkVibratoDepth[iString] = 0
-    if $SYMPATHETIC_LEVEL > 0 then
-      gkFrequency[iString] = giOpenFrequency[iString]
-      gkArticulation[iString] = 0
-      gkLegato[iString] = 0
+    if $SYMPATHETIC_LEVEL > 0 && p6 == 0 && timeinstk() == 1 then
+      event "i", "BachOpen", 0.16, 0.001, iString, iGestureId
     endif
+  endif
+endin
+
+instr BachOpen
+  iString = int(p4)
+  iGestureId = int(p5)
+  if gkGestureId[iString] == iGestureId && gkTrigger[iString] == 0 then
+    gkFrequency[iString] = giOpenFrequency[iString]
+    gkArticulation[iString] = 0
+    gkLegato[iString] = 0
   endif
 endin
 
@@ -295,6 +346,9 @@ instr StringController
   kRate = max(4.8, gkVibratoRate[iString])
   kCents HlolBachHumanVibrato kDepth, kRate, iString
   kFrequency = max(20, kBaseFrequency) * exp(log(2) * kCents / 1200)
+  if gkTrigger[iString] == 0 && gkFrequency[iString] == giOpenFrequency[iString] then
+    kFrequency = giOpenFrequency[iString]
+  endif
 
   kDynamic = gkDynamic[iString]
   ; Preserve the written upper voice while lower voices move beneath it.
@@ -359,7 +413,8 @@ instr StringController
   ; The shared sign and motion describe one physical bow. The sign selects
   ; direction-specific base controls. BachStroke shapes their travel. The
   ; marked lead gets more bow, while lower chord notes ring after the roll.
-  if gkBowDirection > 0 then
+  kDirection = gkPhrase[iString] != 0 ? gkPhrase[iString] : gkBowDirection
+  if kDirection > 0 then
     kSpeed = 0.30 + 0.48 * kDynamic
     kForce = 0.15 + 0.63 * kDynamic
     kPosition = gkStrokeId <= 187 ? 0.145 : 0.118
@@ -387,17 +442,40 @@ instr StringController
   kStrokeTrigger = gkTrigger[iString] * gkStrokeGate * \
       gkChordContact[iString]
 
+  ; Phrase motion belongs to this string, even while shared strokes advance.
+  kPhraseDynamic portk kDynamic, 0.010
+  if gkPhrase[iString] != 0 then
+    if kDirection > 0 then
+      kSpeed = 0.30 + 0.48 * kPhraseDynamic
+      kForce = 0.15 + 0.63 * kPhraseDynamic
+    else
+      kSpeed = -(0.27 + 0.43 * kPhraseDynamic)
+      kForce = 0.14 + 0.58 * kPhraseDynamic
+    endif
+    kSpeed *= kVoiceSpeed
+    kForce *= kVoiceForce
+    kStrokeTrigger = gkTrigger[iString]
+  endif
+
   ; Keep the chord lead close to the bridge through the roll.
   if iString == kLeadString && gkChordSize[iString] >= 3 then
     kPosition = 0.11
     kSpeed *= 0.96
   endif
 
+  ; Shortening the string moves the bow less in millimetres than a fixed ratio.
+  kSpeakingLengthRatio = min(1, giOpenFrequency[iString] / max(20, kBaseFrequency))
+  kPosition *= 1 + 0.35 * (1 / max(0.40, kSpeakingLengthRatio) - 1)
+
+  kForce *= gkChordSize[iString] < 3 ? 1.05 : 1.0
+  kSpeed = max(-1, min(1, kSpeed * gkBowTravel[iString]))
+  kPosition *= 1 - 0.17 * (gkBowTravel[iString] - 1)
   aLeft, aRight hlolli_wg_violin \
       kStrokeTrigger, kFrequency, kForce, kSpeed, kPosition, \
       0, 0, gkArticulation[iString], 0, 0, iString, giViolin
-  gaDryLeft += aLeft
-  gaDryRight += aRight
+  iDirectWeight = iString == 1 ? 0.76 : 1.0
+  gaDryLeft += iDirectWeight * aLeft
+  gaDryRight += iDirectWeight * aRight
 endin
 
 instr ViolinBody

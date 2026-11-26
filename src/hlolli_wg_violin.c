@@ -56,6 +56,9 @@
 #define WG_VIOLIN_EXCITER_MAX_PULSE_SECONDS 0.004
 #define WG_VIOLIN_RELEASE_LEVEL 0.001
 #define WG_VIOLIN_RELEASE_ENGAGE_SECONDS 0.00035
+#define WG_VIOLIN_REOPEN_LEVEL 0.005
+#define WG_VIOLIN_REOPEN_LEVEL_CUTOFF_HZ 35.0
+#define WG_VIOLIN_REOPEN_LIMIT_SECONDS 0.38
 #define WG_VIOLIN_HARMONIC_MIN_ORDER 2U
 #define WG_VIOLIN_HARMONIC_MAX_ORDER 8U
 #define WG_VIOLIN_HARMONIC_NATURAL_CENTS 1.0
@@ -125,6 +128,7 @@ typedef struct {
   double bandwidth;
   double gain;
   double pan;
+  double source_gains[WG_VIOLIN_STRINGS];
 } WG_VIOLIN_BODY_MODE_SPEC;
 
 typedef struct {
@@ -133,6 +137,7 @@ typedef struct {
   double nut_cutoff_hz;
   double bridge_cutoff_hz;
   double nut_loss_fraction;
+  double stopped_finger_loss;
 } WG_VIOLIN_STRING_PROFILE;
 
 typedef struct {
@@ -366,12 +371,12 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
     .id = "generic_violin",
     .display_name = "Generic Violin",
     .source_sha256 =
-        "9cec902aff31ce81edb134279d66a35851ed13c30d8fd45ffe6c61fbe538d8f6",
+        "d8b519a9f92c24288d3c9bba6cb75b243d20fad6c22b4280024cebbd63d97ca0",
     .strings = {
-        {0.55, 0.25, 20000.0, 5386.995271806526, 0.25},
-        {0.42, 0.25, 4200.0, 4964.244281108786, 0.25},
-        {0.30, 0.25, 12000.0, 7086.471045764144, 0.25},
-        {0.22, 0.25, 12000.0, 6024.580442039031, 0.25},
+        {0.55, 0.25, 20000.0, 5386.995271806526, 0.25, 1.32},
+        {0.42, 0.25, 4200.0, 6056.378022952718, 0.25, 1.35},
+        {0.30, 0.25, 12000.0, 7086.471045764144, 0.25, 1.35},
+        {0.22, 0.25, 12000.0, 6024.580442039031, 0.25, 1.35},
     },
     .bow = {
         .speed_scale = 0.65,
@@ -427,18 +432,18 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
         .mute_high_attenuation = 0.65,
         .mute_level_attenuation = 0.55,
         .modes = {
-            {265.0, 15.0, 0.6310, 0.0},
-            {395.0, 25.0, 0.2818, -0.10},
-            {430.0, 20.0, 0.3981, 0.08},
-            {550.0, 30.0, 0.7079, -0.16},
-            {665.0, 30.0, 1.0000, 0.16},
-            {820.0, 55.0, 0.5200, -0.22},
-            {1040.0, 80.0, 0.4000, 0.22},
-            {1320.0, 120.0, 0.3400, -0.26},
-            {1710.0, 180.0, 0.3100, 0.26},
-            {2350.0, 420.0, 0.5000, -0.30},
-            {3300.0, 650.0, 0.3600, 0.30},
-            {4700.0, 1100.0, 0.1800, -0.24},
+            {265.0, 15.0, 0.6310, 0.0, {1.0, 1.0, 1.0, 1.0}},
+            {395.0, 25.0, 0.2818, -0.10, {1.0, 1.0, 1.0, 1.0}},
+            {430.0, 20.0, 0.3981, 0.08, {1.0, 1.0, 1.0, 1.0}},
+            {550.0, 30.0, 0.7079, -0.16, {1.0, 1.0, 1.0, 1.0}},
+            {665.0, 30.0, 1.0000, 0.16, {1.0, 1.0, 1.0, 1.0}},
+            {820.0, 55.0, 0.5200, -0.22, {1.0, 1.0, 1.0, 1.0}},
+            {1040.0, 80.0, 0.30000000000000004, 0.22, {1.0, 1.0, 1.0, 1.0}},
+            {1320.0, 120.0, 0.255, -0.26, {1.0, 1.0, 1.0, 1.0}},
+            {1710.0, 180.0, 0.23249999999999998, 0.26, {1.0, 1.0, 1.0, 1.0}},
+            {2350.0, 420.0, 0.5000, -0.30, {1.0, 1.0, 1.0, 1.0}},
+            {3300.0, 650.0, 1.08, 0.30, {0.3975, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001}},
+            {4350.0, 1100.0, 0.486, -0.24, {0.4629629629629629, 0.9259259259259258, 1.0, 1.111111111111111}},
         },
     },
 };
@@ -571,6 +576,10 @@ typedef struct {
   double bridge_dynamic_input;
   double bridge_dynamic_output;
   double last_bridge_output;
+  double bridge_power;
+  double bridge_power_smoothing;
+  double reopen_power;
+  uint64_t release_start_sample;
   double open_frequency;
   double finger_target_position;
   double finger_position;
@@ -612,6 +621,7 @@ typedef struct {
   double collision_force;
   double characteristic_impedance;
   double bow_speed_smoothing;
+  double bow_contact_default_attack_smoothing;
   double bow_contact_attack_smoothing;
   double bow_contact_release_smoothing;
   double bow_position_smoothing;
@@ -759,6 +769,7 @@ typedef struct {
   int32_t gesture_bow_change_active;
   int32_t gesture_command_direction;
   int32_t passive_open_active;
+  int32_t passive_open_from_stopped;
   uint64_t wave_samples;
   uint64_t wave_resets;
   uint64_t excitation_count;
@@ -1483,7 +1494,9 @@ static int32_t wg_violin_string_profile_is_valid(
       wg_violin_profile_number_is_valid(
           string->bridge_cutoff_hz, 100.0, 100000.0) &&
       wg_violin_profile_number_is_valid(
-          string->nut_loss_fraction, 0.0, 1.0);
+          string->nut_loss_fraction, 0.0, 1.0) &&
+      wg_violin_profile_number_is_valid(
+          string->stopped_finger_loss, 0.0, 4.0);
 }
 
 static int32_t wg_violin_bow_profile_is_valid(
@@ -1813,6 +1826,7 @@ static int32_t wg_violin_body_profile_is_valid(
   }
   for (mode_index = 0U; mode_index < WG_VIOLIN_BODY_MODES; mode_index++) {
     const WG_VIOLIN_BODY_MODE_SPEC *mode = &body->modes[mode_index];
+    uint32_t string_index;
     if (!wg_violin_profile_number_is_valid(mode->frequency, 20.0, 100000.0) ||
         mode->frequency <= previous_frequency ||
         !wg_violin_profile_number_is_valid(mode->bandwidth, 0.01, 100000.0) ||
@@ -1820,6 +1834,13 @@ static int32_t wg_violin_body_profile_is_valid(
         !wg_violin_profile_number_is_valid(mode->gain, 0.0, 100.0) ||
         !wg_violin_profile_number_is_valid(mode->pan, -1.0, 1.0)) {
       return 0;
+    }
+    for (string_index = 0U; string_index < WG_VIOLIN_STRINGS;
+         string_index++) {
+      if (!wg_violin_profile_number_is_valid(
+          mode->source_gains[string_index], 0.0, 4.0)) {
+        return 0;
+      }
     }
     previous_frequency = mode->frequency;
   }
@@ -2649,6 +2670,8 @@ static void wg_violin_zero_waveguide(WG_VIOLIN_STRING_STATE *string,
   string->bridge_dynamic_input = 0.0;
   string->bridge_dynamic_output = 0.0;
   string->last_bridge_output = 0.0;
+  string->bridge_power = 0.0;
+  string->reopen_power = 0.0;
   string->delay_velocity = 0.0;
   string->finger_noise_envelope = 0.0;
   string->finger_noise_highpass = 0.0;
@@ -2787,13 +2810,8 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
 
   const double position = wg_violin_clamp(string->position, 0.01, 0.49);
   double tuning_frequency;
-
-#if defined(HLOLLI_WG_VIOLIN_TEST_API)
-  nut_cutoff *= string->diagnostic_nut_cutoff_scale;
-  bridge_cutoff *= string->diagnostic_bridge_cutoff_scale;
-#endif
-  nut_cutoff = fmin(nut_cutoff, 0.45 * sample_rate);
-  bridge_cutoff = fmin(bridge_cutoff, 0.45 * sample_rate);
+  double stop_position;
+  double finger_loss;
 
   frequency = wg_violin_frequency(frequency, sample_rate);
   tuning_frequency = string->harmonic != 0U && string->harmonic_valid
@@ -2815,6 +2833,17 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
     wg_violin_refresh_release_gain_target(string);
     return;
   }
+  stop_position = string->harmonic_natural ? 0.0 :
+      wg_violin_stop_position(string->open_frequency, frequency);
+  finger_loss = wg_violin_clamp((stop_position - 0.012) / 0.38, 0.0, 1.0);
+  nut_cutoff /= 1.0 + profile->stopped_finger_loss * finger_loss;
+#if defined(HLOLLI_WG_VIOLIN_TEST_API)
+  nut_cutoff *= string->diagnostic_nut_cutoff_scale;
+  bridge_cutoff *= string->diagnostic_bridge_cutoff_scale;
+#endif
+  nut_cutoff = fmin(nut_cutoff, 0.45 * sample_rate);
+  bridge_cutoff = fmin(bridge_cutoff, 0.45 * sample_rate);
+
   string->target_frequency = frequency;
   string->delay_tuning_frequency = tuning_frequency;
   string->delay_position = position;
@@ -2972,7 +3001,14 @@ static double wg_violin_release_loop_gain(
   const double wanted_rate = -log(WG_VIOLIN_RELEASE_LEVEL) / tail_seconds;
   const double passive_rate = 1.0 /
       wg_violin_bound_string_profile(string)->loss_time_constant_seconds;
-  const double added_rate = fmax(0.0, wanted_rate - passive_rate);
+  const int32_t open_arco_string =
+      articulation <= WG_VIOLIN_ARTICULATION_DETACHE &&
+      string->harmonic == 0U &&
+      !(string->passive_open_active && string->passive_open_from_stopped) &&
+      fabs(frequency - string->open_frequency) <=
+          1.0e-5 * string->open_frequency;
+  const double added_rate = fmax(0.0, wanted_rate - passive_rate) *
+      (open_arco_string ? 0.01 : 1.0);
 
   return wg_violin_clamp(exp(-added_rate / frequency), 0.05, 1.0);
 }
@@ -3015,8 +3051,24 @@ static void wg_violin_refresh_release_gain_target(
 static void wg_violin_begin_release(WG_VIOLIN_STRING_STATE *string)
 {
   string->release_gate_positive = 0;
+  string->release_start_sample = string->last_update_sample;
+  string->reopen_power = string->bridge_power *
+      (WG_VIOLIN_REOPEN_LEVEL * WG_VIOLIN_REOPEN_LEVEL);
   wg_violin_refresh_release_gain_target(string);
   string->exciter_contact_target = 0.0;
+}
+
+static int32_t wg_violin_hold_stopped_release(
+    const WG_VIOLIN_STRING_STATE *string, uint64_t sample, double sample_rate)
+{
+  return string->release_profile_articulation <=
+          WG_VIOLIN_ARTICULATION_DETACHE &&
+      string->harmonic == 0U &&
+      string->finger_target_position > WG_VIOLIN_FINGER_STOP_EPSILON &&
+      string->reopen_power > 0.0 &&
+      string->bridge_power > fmax(1.0e-16, string->reopen_power) &&
+      (double)(sample - string->release_start_sample) <
+          WG_VIOLIN_REOPEN_LIMIT_SECONDS * sample_rate;
 }
 
 static void wg_violin_begin_attack(WG_VIOLIN_STRING_STATE *string)
@@ -3161,6 +3213,8 @@ static void wg_violin_prepare_gesture(
   const uint32_t old_articulation = string->gesture_articulation;
   const int32_t mode_changed = had_state &&
       old_articulation != articulation;
+  const double soft_detache = articulation == WG_VIOLIN_ARTICULATION_DETACHE
+      ? wg_violin_clamp((0.44 - force) / 0.18, 0.0, 1.0) : 0.0;
 
   if (had_state && !mode_changed && string->gesture_active &&
       articulation >= WG_VIOLIN_ARTICULATION_DETACHE &&
@@ -3194,6 +3248,10 @@ static void wg_violin_prepare_gesture(
   string->gesture_force_target = force;
   string->gesture_speed_target = speed;
   string->gesture_position_target = position;
+  string->bow_contact_attack_smoothing = soft_detache > 0.0
+      ? wg_violin_smoothing_coefficient(
+            0.0015 + 0.0008 * soft_detache, sample_rate)
+      : string->bow_contact_default_attack_smoothing;
   string->gesture_initialized = 1;
   if (active) {
     string->release_profile_articulation = articulation;
@@ -4163,7 +4221,8 @@ static void wg_violin_initialize_body(WG_VIOLIN_STATE *state)
          string_index++) {
       const double height = ((double)string_index - 1.5) / 1.5;
       mode->source_gain[string_index] =
-          1.0 + 0.10 * height * spectral_position;
+          (1.0 + 0.10 * height * spectral_position) *
+          spec->source_gains[string_index];
     }
   }
 }
@@ -5873,6 +5932,9 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   }
   string->last_bridge_output = wg_violin_clamp(
       output, -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
+  string->bridge_power += string->bridge_power_smoothing *
+      (string->last_bridge_output * string->last_bridge_output -
+       string->bridge_power);
   string->bridge_write_index++;
   if (string->bridge_write_index >= string->rail_size) {
     string->bridge_write_index = 0U;
@@ -6058,6 +6120,7 @@ static void wg_violin_advance_string_gap(WG_VIOLIN_STRING_STATE *string,
       string->bow_edge_nut_state = 0.0;
       string->bow_edge_return_state = 0.0;
       wg_violin_bridge_dynamic_fast_forward(string, remaining, scale);
+      string->bridge_power *= scale * scale;
       string->delay += wg_violin_clamp(
           string->target_delay - string->delay,
           -maximum_delay_step, maximum_delay_step);
@@ -6497,6 +6560,9 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
     string->bridge_dynamic_pole = exp(
         -WG_VIOLIN_TWO_PI * WG_VIOLIN_BRIDGE_DYNAMIC_CUTOFF_HZ /
         sample_rate);
+    string->bridge_power_smoothing = wg_violin_smoothing_coefficient(
+        1.0 / (WG_VIOLIN_TWO_PI * WG_VIOLIN_REOPEN_LEVEL_CUTOFF_HZ),
+        sample_rate);
     string->finger_position_smoothing = wg_violin_smoothing_coefficient(
         0.003, sample_rate);
     string->finger_pressure_attack_smoothing =
@@ -6541,8 +6607,10 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
         string_profile->characteristic_impedance;
     string->bow_speed_smoothing = wg_violin_smoothing_coefficient(
         0.002, sample_rate);
-    string->bow_contact_attack_smoothing =
+    string->bow_contact_default_attack_smoothing =
         wg_violin_smoothing_coefficient(0.0015, sample_rate);
+    string->bow_contact_attack_smoothing =
+        string->bow_contact_default_attack_smoothing;
     string->bow_contact_release_smoothing =
         wg_violin_smoothing_coefficient(0.006, sample_rate);
     string->bow_position_smoothing = wg_violin_smoothing_coefficient(
@@ -7288,9 +7356,10 @@ static int32_t wg_violin_voice_perf(
                                p->violin->sample_rate);
   string->trigger = wg_violin_clamp(
       wg_violin_input(p->ktrigger, 0.0), 0.0, 1.25);
-  string->frequency = wg_violin_frequency(
-      wg_violin_input(p->kfrequency, 440.0),
-      p->violin->sample_rate);
+  trigger_positive = string->trigger > 1.0e-7;
+  if (string->release_gate_positive && !trigger_positive) {
+    wg_violin_begin_release(string);
+  }
   string->force = wg_violin_clamp(
       wg_violin_input(p->kforce, 0.45), 0.0, 1.0);
   string->speed = wg_violin_clamp(
@@ -7306,20 +7375,27 @@ static int32_t wg_violin_voice_perf(
   {
     const double harmonic_request = p->kharmonic != NULL
         ? (double)*p->kharmonic : 0.0;
+    const double frequency = wg_violin_frequency(
+        wg_violin_input(p->kfrequency, 440.0), p->violin->sample_rate);
+
+    if (trigger_positive || !(fabs(harmonic_request) <= 1.0e-12) ||
+        fabs(frequency - string->open_frequency) >
+            1.0e-5 * string->open_frequency ||
+        !wg_violin_hold_stopped_release(
+            string, start_sample, p->violin->sample_rate)) {
+      string->frequency = frequency;
+    }
     wg_violin_prepare_harmonic(
         string, harmonic_request, string->frequency,
         p->violin->sample_rate);
   }
   string->strange = wg_violin_clamp(
       wg_violin_input(p->kstrange, 0.0), -1.0, 1.0);
-  trigger_positive = string->trigger > 1.0e-7;
   if (trigger_positive) {
     string->bow_delay_active =
         string->articulation < WG_VIOLIN_ARTICULATION_PIZZICATO ? 1 : 0;
   }
-  if (string->release_gate_positive && !trigger_positive) {
-    wg_violin_begin_release(string);
-  } else if (!string->release_gate_positive && trigger_positive) {
+  if (!string->release_gate_positive && trigger_positive) {
     wg_violin_begin_attack(string);
   }
   wg_violin_prepare_finger(
@@ -7506,6 +7582,9 @@ static void wg_violin_advance_unowned_open_strings(
     }
     if (sympathetic > 1.0e-12) {
       if (!string->passive_open_active) {
+        /* Keep the stopped-note damping when the renderer reopens its rail. */
+        string->passive_open_from_stopped = string->harmonic != 0U ||
+            string->finger_target_position > WG_VIOLIN_FINGER_STOP_EPSILON;
         wg_violin_release_bow(string);
       }
       string->passive_open_active = 1;
@@ -7530,15 +7609,19 @@ static void wg_violin_advance_unowned_open_strings(
         string, wg_violin_add_samples(block_start, start),
         state->sample_rate);
     string->trigger = 0.0;
-    string->frequency = string->open_frequency;
     string->vibrato_depth_cents = 0.0;
     string->vibrato_rate_hz = 0.0;
     string->strange = 0.0;
-    wg_violin_prepare_harmonic(
-        string, 0.0, string->open_frequency, state->sample_rate);
-    wg_violin_prepare_finger(string, string->open_frequency);
+    if (!wg_violin_hold_stopped_release(
+            string, wg_violin_add_samples(block_start, start),
+            state->sample_rate)) {
+      string->frequency = string->open_frequency;
+      wg_violin_prepare_harmonic(
+          string, 0.0, string->open_frequency, state->sample_rate);
+      wg_violin_prepare_finger(string, string->open_frequency);
+    }
     wg_violin_prepare_waveguide(
-        string, string->open_frequency, state->sample_rate);
+        string, string->frequency, state->sample_rate);
     string->release_gate_positive = 0;
     wg_violin_prepare_bridge_send(string, epoch, state->ksmps);
     for (sample = start; sample < limit; sample++) {
@@ -7565,7 +7648,7 @@ static void wg_violin_advance_unowned_open_strings(
         decay_seconds);
     wg_violin_advance_phase(
         &string->phase, (uint64_t)(limit - start),
-        string->open_frequency, state->sample_rate);
+        string->frequency, state->sample_rate);
     string->last_update_sample = wg_violin_add_samples(
         block_start, limit);
     string->last_update_valid = 1;

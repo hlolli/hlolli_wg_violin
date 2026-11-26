@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Shape bow travel through long Chaconne notes and accept local bow
+  trajectories for joined strokes.
+- Let bow contact build more gradually in light détaché strokes.
+- Let the D string retain more upper-partial energy at the bridge.
+- Move the highest body resonance from 4.70 to 4.35 kHz.
+- Lower the radiation gain of the 1.04, 1.32, and 1.71 kHz body modes
+  by 25 percent.
+- Let open arco and détaché strings ring with 1 percent of the added release
+  damping.
+- Keep a stopped arco or détaché tail at its played pitch until it decays
+  before reopening the string.
+- Raise Chaconne bow force by 5 percent on single notes and double stops.
+  Let ordinary notes ring for 160 ms before returning to the open pitch for
+  sympathetic response.
+- Make Chaconne bow placement follow the vibrating string length. Reduce
+  its direct level, especially on G, and tune the upper body modes by string.
+- Increase high-frequency loss at the stopped finger inside the waveguide.
 - Bound delay changes through pitch reversals and take the bridge force
   after one-way travel from the contact point.
 - Use a fixed feedback delay for Csound blocks up to 128 samples. Add a
@@ -10,6 +27,24 @@
 - Keep the Chaconne body settings fixed and align its direct and wet buses.
 - Read the browser workbench factory from the bundle's named export.
 
+- Move the checked violin adapter and its tests from the analyzer repository.
+  Keep shared analysis tools as an explicit dependency.
+
+- Fix automatic Csound header and executable discovery when cached paths are
+  empty.
+- Preserve C string literals and comment-separated tokens when preparing the
+  browser source.
+- Install the Chaconne phrase data and continuous-bow example. Check that all
+  installed public examples compile without the source tree.
+- Add optional infinite-bow phrasing to selected Chaconne variations. Join
+  817 same-string boundaries while keeping written slurs, accents, and chords.
+  Preserve bow contact and vibrato through joined notes; retain the stopped
+  pitch in their release tails. `INFINITE_BOW=0` restores the prior phrasing.
+- Add a public four-string continuous-bow example, native state and PCM
+  regressions, a browser PCM check, and a same-gain listening comparison.
+  Mechanical-burst suppression remains a private listening diagnostic.
+- Add a checked list of the research sources used by the model, score controls,
+  tests, and open-string diagnosis.
 - License the plug-in under GPL-3.0-only.
 - Move the model source to `src/`, group research under `docs/`, and move
   test-only scripts into `tests/`. Replace the completed plan with short API,

@@ -86,6 +86,8 @@ def strip_comments(source: str) -> str:
         if state == "code":
             if source.startswith("/*", index):
                 state = "block"
+                # Keep tokens on either side of a comment separate.
+                output.append(" ")
                 index += 2
             elif source.startswith("//", index):
                 state = "line"
@@ -132,14 +134,45 @@ def compact(source: str) -> str:
         r"<<|>>|[+*/%=<>&|^!])\s*"
     )
     delimiter = re.compile(r"\s*([{},;:?()\[\]])\s*")
+
+    def compact_code_line(line: str) -> str:
+        """Compact code while leaving string and character literals byte exact."""
+        parts: list[str] = []
+        start = 0
+        index = 0
+        while index < len(line):
+            if line[index] not in "\"'":
+                index += 1
+                continue
+            quote = line[index]
+            if index > start:
+                code = re.sub(r"[ \t]+", " ", line[start:index])
+                code = delimiter.sub(r"\1", code)
+                code = operator.sub(r"\1", code)
+                parts.append(code)
+            literal_start = index
+            index += 1
+            while index < len(line):
+                if line[index] == "\\":
+                    index += 2
+                elif line[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+            parts.append(line[literal_start:index])
+            start = index
+        code = re.sub(r"[ \t]+", " ", line[start:])
+        code = delimiter.sub(r"\1", code)
+        parts.append(operator.sub(r"\1", code))
+        return "".join(parts)
+
     for raw_line in source.splitlines():
         line = raw_line.strip()
         if not line:
             continue
-        line = re.sub(r"[ \t]+", " ", line)
         if not line.startswith("#"):
-            line = delimiter.sub(r"\1", line)
-            line = operator.sub(r"\1", line)
+            line = compact_code_line(line)
         lines.append(line)
     return "\n".join(lines) + "\n"
 

@@ -23,8 +23,8 @@
       "id": "bridge_cutoff_d_hz",
       "unit": "Hz",
       "minimum": 2800.0,
-      "maximum": 5200.0,
-      "baseline": 4964.244281108786,
+      "maximum": 6200.0,
+      "baseline": 6056.378022952718,
       "profile_paths": [["strings", 1, "bridge_cutoff_hz"]]
     },
     {

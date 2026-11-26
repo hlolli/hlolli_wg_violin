@@ -46,10 +46,11 @@ def short_window(
     origin = playback.seconds_at(start, tempo)
     windows = []
     for beat in CHORD_BEATS:
-        early = playback.seconds_at(beat + 0.12, tempo) - origin
-        early_end = playback.seconds_at(beat + 0.32, tempo) - origin
-        late = playback.seconds_at(beat + 0.68, tempo) - origin
-        late_end = playback.seconds_at(beat + 0.90, tempo) - origin
+        # The upper bow plane starts up to 45% into these one-beat chords.
+        early = playback.seconds_at(beat + 0.58, tempo) - origin
+        early_end = playback.seconds_at(beat + 0.74, tempo) - origin
+        late = playback.seconds_at(beat + 0.78, tempo) - origin
+        late_end = playback.seconds_at(beat + 0.94, tempo) - origin
         windows.append(((early, early_end), (late, late_end)))
     return "\n".join(lines) + "\n", windows
 

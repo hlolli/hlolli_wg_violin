@@ -76,6 +76,15 @@ Keep `kTrigger` positive across a direct same-string slur. A falling edge adds
 the release damping for the active articulation. Codes 5 through 7 fire once
 on a rising edge. Tremolo and col legno tratto run while the gate stays high.
 
+For an idealized continuous bow, use articulation `0`, hold the speed sign,
+and keep the trigger positive through each joined note's last sample. Start
+its successor at the same sample on the same handle and string. Pitch, force,
+speed magnitude, and vibrato can still change. A repeated pitch can sustain
+through the boundary. End the join at a rest, an explicit reattack, or a change
+of string or articulation. Keep the body renderer alive for the tail.
+`examples/infinite_bow.csd` uses these public controls on all four strings;
+`--omacro:CONTINUOUS=0` gives separate attacks for comparison.
+
 `kHarmonic` keeps `kFrequency` as the pitch you want to hear. The model derives
 the lower string pitch and touch point. An unsafe harmonic falls back to normal
 stopping without clearing the string.
@@ -112,6 +121,8 @@ whichever is longer. At 48 kHz, 128 samples are about 2.67 ms.
 - One voice instance owns one physical string at a time.
 - Use separate voice instances on separate strings for double stops.
 - A release changes contact and damping. It does not erase the string.
+- After a stopped arco or détaché note, an open-pitch request with zero
+  trigger waits for the tail to decay, for up to 380 ms after release.
 - Exact handoffs keep the string rails and the state that should carry on.
 - Long silent gaps decay or clear old state instead of freezing it.
 - Separate handles never share string, body, phase, or random state.

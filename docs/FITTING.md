@@ -13,7 +13,9 @@ under an ignored local folder.
 - `profiles/schema/` checks field shapes and bounds.
 - `profiles/measurements/` holds small public numeric sources used by a fit.
 - `fit/violin_fit_v1.json` maps search values to model fields.
-- `tools/violin_fit_adapter.py` renders fixed probe cases for the analyzer.
+- `tools/analyzer_adapter/` holds the checked renderer, fit manifest, and
+  [shared-fit commands](../tools/analyzer_adapter/README.md).
+- `tools/violin_fit_adapter.py` keeps the older fixed-probe workflow.
 - `tools/generate_profiles.py` checks the data and writes the C table.
 
 The adapter is a thin plug-in link. Reusable audio analysis belongs in

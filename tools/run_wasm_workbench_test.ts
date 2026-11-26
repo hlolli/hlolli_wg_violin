@@ -9,6 +9,7 @@ interface Options {
   source: string
   csd: string
   output?: string
+  pcmOutput?: string
 }
 
 function parseOptions(): Options {
@@ -24,6 +25,7 @@ function parseOptions(): Options {
     else if (name === "--source") result.source = value
     else if (name === "--csd") result.csd = value
     else if (name === "--output") result.output = value
+    else if (name === "--pcm-output") result.pcmOutput = value
     else throw new Error(`unknown argument: ${name}`)
   }
   if (!result.compilerRoot || !result.source || !result.csd) {
@@ -98,23 +100,56 @@ async function main(): Promise<void> {
     configurable: true
   })
   let blocks = 0
+  let channels = 0
+  let sampleRate = 0
+  let pcmPeak = 0
+  const pcm: number[] = []
   try {
     const factory = await browserFactory(compilerRoot)
     const api = await factory({ withPlugins: [wasm] })
     const csound = api.csoundCreate()
     try {
+      if (api.csoundSetOption(csound, "-n") !== 0 ||
+          api.csoundSetOption(csound, "--sample-accurate") !== 0 ||
+          api.csoundSetOption(csound, "--num-threads=1") !== 0) {
+        throw new Error("browser Csound rejected render options")
+      }
       if (api.csoundCompileCSD(csound, csd) !== 0) {
-        throw new Error("browser Csound rejected the smoke CSD")
+        throw new Error("browser Csound rejected the CSD")
       }
       if (api.csoundStart(csound) !== 0) {
         throw new Error("browser Csound did not start")
       }
+      channels = api.csoundGetNchnls(csound)
+      sampleRate = api.csoundGetSr(csound)
+      const ksmps = api.csoundGetKsmps(csound)
+      const zeroDbfs = api.csoundGet0dBFS(csound)
+      if (api.csoundGetSizeOfMYFLT() !== 8 || channels < 1 ||
+          sampleRate <= 0 || ksmps < 1 || zeroDbfs <= 0) {
+        throw new Error("browser Csound returned invalid audio facts")
+      }
       let status = 0
-      while (status === 0 && blocks < 10_000) {
+      while (status === 0 && blocks < Math.ceil(120 * sampleRate / ksmps)) {
         status = api.csoundPerformKsmps(csound)
         blocks += 1
+        if (status === 0 && options.pcmOutput) {
+          const spout = new Float64Array(
+            api.getMemory().buffer,
+            api.csoundGetSpout(csound),
+            ksmps * channels
+          )
+          for (const rawSample of spout) {
+            const sample = rawSample / zeroDbfs
+            if (!Number.isFinite(sample)) {
+              throw new Error("browser Csound produced non-finite PCM")
+            }
+            pcm.push(sample)
+            pcmPeak = Math.max(pcmPeak, Math.abs(sample))
+          }
+        }
       }
-      if (status === 0) throw new Error("browser score did not end")
+      if (status === 0) throw new Error("browser score exceeded 120 seconds")
+      if (status < 0) throw new Error("browser score failed during performance")
     } finally {
       api.csoundDestroy(csound)
     }
@@ -126,14 +161,25 @@ async function main(): Promise<void> {
     schema_version: 1,
     source_bytes: new TextEncoder().encode(source).byteLength,
     wasm_bytes: wasm.byteLength,
-    performed_blocks: blocks
+    performed_blocks: blocks,
+    pcm_channels: channels,
+    pcm_sample_rate: sampleRate,
+    pcm_samples: pcm.length,
+    pcm_peak: pcmPeak
+  }
+  if (options.pcmOutput) {
+    if (pcm.length === 0) throw new Error("browser Csound returned no PCM")
+    const bytes = new ArrayBuffer(pcm.length * 8)
+    const view = new DataView(bytes)
+    pcm.forEach((sample, index) => view.setFloat64(index * 8, sample, true))
+    await Bun.write(options.pcmOutput, bytes)
   }
   if (options.output) {
     await Bun.write(options.output, `${JSON.stringify(facts, null, 2)}\n`)
   }
   console.log(
     `PASS WASM: source=${facts.source_bytes} wasm=${facts.wasm_bytes} ` +
-      `blocks=${facts.performed_blocks}`
+      `blocks=${facts.performed_blocks} pcm=${facts.pcm_samples}`
   )
 }
 

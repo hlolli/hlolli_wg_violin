@@ -447,7 +447,8 @@ def render_profile(item: Mapping[str, Any]) -> List[str]:
         "nut_loss_fraction",
     )
     for string in profile["strings"]:
-        lines.append("        {{{}}},".format(values(string, string_names)))
+        lines.append("        {{{}, {}}},".format(
+            values(string, string_names), c_number(string.get("stopped_finger_loss", 0))))
     lines.extend(
         [
             "    },",
@@ -526,7 +527,10 @@ def render_profile(item: Mapping[str, Any]) -> List[str]:
         lines.append("        .{} = {},".format(field, c_number(body[field])))
     lines.append("        .modes = {")
     for mode in body["modes"]:
-        lines.append("            {{{}}},".format(values(mode, ("frequency_hz", "bandwidth_hz", "gain", "pan"))))
+        mode_values = values(mode, ("frequency_hz", "bandwidth_hz", "gain", "pan"))
+        source_gains = mode.get("source_gains", (1, 1, 1, 1))
+        lines.append("            {{{}, {{{}}}}},".format(
+            mode_values, ", ".join(c_number(gain) for gain in source_gains)))
     lines.extend(["        },", "    },", "};"])
     return lines
 
@@ -626,6 +630,8 @@ def run_self_tests(
     cases.append(("matrix symmetry", lambda: checked(changed(("coupling", "bridge_coefficients", 0, 1), Decimal("0.001")))))
     cases.append(("mode order", lambda: checked(changed(("body", "modes", 1, "frequency_hz"), Decimal("200")))))
     cases.append(("binary64 mode collision", lambda: checked(changed(("body", "modes", 1, "frequency_hz"), Decimal("265.0000000000000000001")))))
+    cases.append(("body mode source count", lambda: checked(changed(("body", "modes", 0, "source_gains"), [1, 1, 1]))))
+    cases.append(("body mode source gain range", lambda: checked(changed(("body", "modes", 0, "source_gains"), [1, 1, 1, -1]))))
     for label, action in cases:
         expect_failure(label, action)
     expect_failure("duplicate JSON key", lambda: unique_object((("x", 1), ("x", 2))))

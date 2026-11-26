@@ -67,6 +67,17 @@ instr Voice
   outs aLeft, aRight
 endin
 
+instr ReopenVoice
+  iOpen = 195.997717990875
+  kTime timeinsts
+  kTrigger = kTime < 0.30 || ($TEST_VARIANT == 1 && kTime >= 0.42) ? 1 : 0
+  kFrequency = kTime < 0.37 ? 293.664767917408 : iOpen
+  aLeft, aRight hlolli_wg_violin \
+      kTrigger, kFrequency, 0.60, 0.62, 0.10, \
+      0, 0, 0, 0, 0, 1, giViolinA
+  outs aLeft, aRight
+endin
+
 instr StrangeVoice
   kTrigger = p7
   kForce = p8
@@ -378,9 +389,11 @@ instr ScheduleTest
     ; A stopped note must damp before its unowned rail retunes open.
     event_i "i", "Voice", 0, 0.30, \
         giViolinA, 1, 293.664767917408, 1, 0.60, 0.62, 0.10, 0
-    event_i "i", "RenderEarly", 0, 0.60, \
+    event_i "i", "RenderEarly", 0, 0.71, \
         giViolinA, $TEST_SYMPATHETIC
     event_i "i", "ProbeOne", 0.560, 0.001, giViolinA, 1, 1
+    event_i "i", "ProbeOne", 0.395, 0.001, giViolinA, 1, 2
+    event_i "i", "ProbeOne", 0.690, 0.001, giViolinA, 1, 3
     event_i "i", "BodyProbe", 0.560, 0.001, giViolinA, 1
   elseif $TEST_CASE == 9 then
     ; A reserved owned target must reject both fixed and sympathetic drive.
@@ -399,6 +412,11 @@ instr ScheduleTest
   elseif $TEST_CASE == 11 then
     event_i "i", "BlockSizeVoice", 0, 1
     event_i "i", "BlockSizeRenderer", 0, 1
+  elseif $TEST_CASE == 12 then
+    event_i "i", "ReopenVoice", 0, 0.72
+    event_i "i", "ProbeOne", 0.395, 0.001, giViolinA, 1, 1
+    event_i "i", "ProbeOne", 0.430, 0.001, giViolinA, 1, 2
+    event_i "i", "ProbeOne", 0.690, 0.001, giViolinA, 1, 3
   endif
 endin
 
