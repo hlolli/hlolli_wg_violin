@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,7 +20,11 @@ import play_bach_chaconne as playback
 
 
 ENTRY_LIMIT_DB = 1.5
-SWELL_LIMIT_DB = 1.5
+BLOCK_SECONDS = 32 / common.RATE
+CONTROL_LINE = re.compile(
+    r"BACH_DOTTED_CONTACT\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+"
+    r"([-+0-9.eE]+)\s+([-+0-9.eE]+)"
+)
 
 
 def verify_opening_pair(score: Path) -> None:
@@ -64,6 +69,41 @@ def short_window(
             bounds(1.50, 1.60), bounds(1.80, 1.98))
 
 
+def trace_score(source: Path, destination: Path) -> None:
+    text = re.sub(r'#include "([^"]+)"',
+                  lambda match: f'#include "{(source.parent / match[1]).as_posix()}"',
+                  source.read_text(encoding="utf-8"))
+    voice = "  aLeft, aRight hlolli_wg_violin "
+    if text.count(voice) != 1:
+        raise ValueError("cannot locate the Chaconne string controller")
+    trace = """  if iString == 3 && gkDottedShort[iString] != 0 then
+    printks "BACH_DOTTED_CONTACT %.17g %.17g %.17g %.17g\\n", \\
+        ksmps / sr, timeinsts(), kStrokeTrigger, kForce, kSpeed
+  endif
+"""
+    destination.write_text(text.replace(voice, trace + voice),
+                           encoding="utf-8")
+
+
+def check_controls(log: str, start: float, end: float) -> None:
+    rows = [tuple(map(float, match.groups()))
+            for match in CONTROL_LINE.finditer(log)]
+    rows = [row for row in rows
+            if start + 3 * BLOCK_SECONDS <= row[0] <= end]
+    if (not rows or rows[0][0] > start + 5 * BLOCK_SECONDS
+            or rows[-1][0] < end - 2 * BLOCK_SECONDS
+            or any(later[0] - earlier[0] > 1.5 * BLOCK_SECONDS
+                   for earlier, later in zip(rows, rows[1:]))):
+        raise ValueError("the dotted-short control trace is incomplete")
+    if any(gate <= 0 or force <= 0 or speed == 0
+           for _, gate, force, speed in rows):
+        raise ValueError("the dotted short loses bow contact")
+    for index, control in enumerate(("contact", "force", "speed"), 1):
+        values = [row[index] for row in rows]
+        if max(values) - min(values) > 1e-8:
+            raise ValueError(f"the dotted short changes its commanded {control}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csound", required=True, type=Path)
@@ -86,22 +126,24 @@ def main() -> int:
                 options.score.resolve(), options.performance.resolve())
             include.write_text(text, encoding="utf-8")
             output = root / "window.wav"
-            common.render(
+            csd = root / "contact.csd"
+            trace_score(options.csd.resolve(), csd)
+            log = common.render(
                 options.csound.resolve(), options.module.resolve(),
-                options.csd.resolve(), include, output, ("BODY_LEVEL=0",))
+                csd, include, output, ("BODY_LEVEL=0",))
+            check_controls(log, entry[0], late[1])
             samples = common.read_mono(output)
             before_rms = common.rms(samples, before)
             entry_rms = common.rms(samples, entry)
             late_rms = common.rms(samples, late)
         entry_deficit = 20.0 * math.log10(before_rms / entry_rms)
+        # The rail can settle after the bow change even with flat commands.
         swell = 20.0 * math.log10(late_rms / entry_rms)
         print(f"dotted-short entry deficit {entry_deficit:.2f} dB")
         print(f"dotted-short internal swell {swell:.2f} dB")
         failures = []
         if entry_deficit > ENTRY_LIMIT_DB:
             failures.append("the short note loses contact at its onset")
-        if swell > SWELL_LIMIT_DB:
-            failures.append("the short note uses an artificial rising envelope")
         if failures:
             for failure in failures:
                 print(f"FAIL: {failure}")

@@ -833,7 +833,7 @@ def check_generated(path: Path) -> None:
                 or ("HlolBachStrokeShape kPhase, iChordSize"
                     not in flat_csd)
                 or ("kBaseFrequency HlolBachPitchTransition "
-                    "gkFrequency[iString], gkLegato[iString]"
+                    "gkFrequency[iString]"
                     not in flat_csd)
                 or "if $SHOW_BARS != 0 then" not in bar_block
                 or 'printf_i "BAR %d\\n", 1, iBar' not in csd

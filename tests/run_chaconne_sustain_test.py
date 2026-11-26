@@ -57,7 +57,7 @@ def short_window(
 
 def render(csound: Path, module: Path, csd: Path,
            include: Path, output: Path,
-           extra_macros: tuple[str, ...] = ()) -> None:
+           extra_macros: tuple[str, ...] = ()) -> str:
     command = [
         str(csound), f"--opcode-lib={module}", "--sample-accurate",
         "--num-threads=1", "-W", "-3", "--nopeaks",
@@ -70,6 +70,7 @@ def render(csound: Path, module: Path, csd: Path,
         stderr=subprocess.STDOUT, text=True, timeout=30)
     if completed.returncode != 0:
         raise ValueError(completed.stdout)
+    return completed.stdout
 
 
 def read_mono(path: Path) -> list[float]:
