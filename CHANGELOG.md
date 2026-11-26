@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Shorten the Chaconne's slur pitch half-time to 1 ms.
+- Disable ALSA in the Csound build used for offline Linux CI tests.
 - Shape bow travel through long Chaconne notes and accept local bow
   trajectories for joined strokes.
 - Let bow contact build more gradually in light détaché strokes.

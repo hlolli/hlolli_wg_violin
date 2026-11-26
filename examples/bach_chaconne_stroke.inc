@@ -1,14 +1,8 @@
 ; Shared bow and pitch controls for the Bach Chaconne demo and its test.
-; Plain slurs keep the rail alive, but they do not turn written notes into
-; portamento. A three-millisecond half-time keeps the handoff smooth without
-; a long audible pitch bend.
-opcode HlolBachPitchTransition, k, kk
-  kTarget, kLegato xin
-  kHalfTime = 0.001
-  if kLegato != 0 then
-    kHalfTime = 0.003
-  endif
-  kFrequency portk kTarget, kHalfTime
+; A 1 ms half-time lets each pitch settle quickly under a continuous bow.
+opcode HlolBachPitchTransition, k, k
+  kTarget xin
+  kFrequency portk kTarget, 0.001
   xout kFrequency
 endop
 

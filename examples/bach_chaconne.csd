@@ -132,7 +132,6 @@ gkRolled[] init 5
 gkVibratoDepth[] init 5
 gkVibratoRate[] init 5
 gkArticulation[] init 5
-gkLegato[] init 5
 gkVoice[] init 5
 gkLead[] init 5
 gkDottedShort[] init 5
@@ -233,12 +232,8 @@ instr BachNote
   iJoinNext = iPhrase != 0 ? giBachJoinNext[iGestureId] : 0
 
   iArticulation = 1
-  if iLegato != 0 then
+  if iLegato != 0 || iPhrase != 0 then
     iArticulation = 0
-  endif
-  if iPhrase != 0 then
-    iArticulation = 0
-    iLegato = 1
   endif
   iTriggerLevel = 0.42 + 0.58 * iDynamic
 
@@ -303,7 +298,6 @@ instr BachNote
     gkVibratoDepth[iString] = kVibratoDepth
     gkVibratoRate[iString] = kVibratoRate
     gkArticulation[iString] = iArticulation
-    gkLegato[iString] = iLegato
     gkVoice[iString] = iVoice
     gkLead[iString] = iLead
     gkDottedShort[iString] = iDottedShort
@@ -330,7 +324,6 @@ instr BachOpen
   if gkGestureId[iString] == iGestureId && gkTrigger[iString] == 0 then
     gkFrequency[iString] = giOpenFrequency[iString]
     gkArticulation[iString] = 0
-    gkLegato[iString] = 0
   endif
 endin
 
@@ -340,8 +333,7 @@ instr StringController
     gkFrequency[iString] = giOpenFrequency[iString]
   endif
 
-  kBaseFrequency HlolBachPitchTransition \
-      gkFrequency[iString], gkLegato[iString]
+  kBaseFrequency HlolBachPitchTransition gkFrequency[iString]
   kDepth portk gkVibratoDepth[iString], 0.060
   kRate = max(4.8, gkVibratoRate[iString])
   kCents HlolBachHumanVibrato kDepth, kRate, iString

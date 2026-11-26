@@ -68,8 +68,8 @@ the lower plane remains bowed through the turn and overlaps the upper attack
 before it releases. The marked lead then stays under the bow.
 The highest active written voice keeps the lead even when a lower voice starts
 a new note. Notes below it step down by pitch. LilyPond slurs keep the same
-stroke and a positive gate. Their pitch handoff uses a 3 ms half-time, which
-joins the notes without turning the written slur into a slide.
+stroke and a positive gate. Their pitch handoff uses a 1 ms half-time so the
+new pitch settles quickly.
 
 The generator marks each true 3:1 dotted figure. Its short note gets 0.055
 more dynamic, 10 percent more bow force, and 8 percent more bow speed. This

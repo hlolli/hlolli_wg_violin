@@ -210,8 +210,9 @@ def main() -> int:
                         for _, frequency in held):
                     settled_ms = 1000.0 * (age - onset)
                     break
-            if settled_ms is None or not 6.0 <= settled_ms <= 18.0:
-                failures.append("plain slur pitch transition is too abrupt or slow")
+            if settled_ms is None or not 2.0 <= settled_ms <= 6.0:
+                failures.append(
+                    f"plain slur pitch settled in {settled_ms} ms, expected 2–6 ms")
 
     wanted_chords = {
         (1, 0, 1), (2, 1, 0), (2, 0, 1),

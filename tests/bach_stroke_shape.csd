@@ -39,12 +39,10 @@ instr PitchProbe
   kAge timeinsts
   if kAge < 0.08 then
     kTarget = cpsmidinn(58)
-    kLegato = 0
   else
     kTarget = cpsmidinn(55)
-    kLegato = 1
   endif
-  kFrequency HlolBachPitchTransition kTarget, kLegato
+  kFrequency HlolBachPitchTransition kTarget
   printks "BACH_PITCH %.9f %.17g %.17g\n", \
       ksmps / sr, kAge, kTarget, kFrequency
 endin
