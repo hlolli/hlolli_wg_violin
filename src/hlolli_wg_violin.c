@@ -2845,6 +2845,12 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
       wg_violin_stop_position(string->open_frequency, frequency);
   finger_loss = wg_violin_clamp((stop_position - 0.012) / 0.38, 0.0, 1.0);
   nut_cutoff /= 1.0 + profile->stopped_finger_loss * finger_loss;
+  if (string->string_index == WG_VIOLIN_STRINGS - 1U) {
+    /* Short stops already lose energy faster through more frequent returns. */
+    const double short_stop = wg_violin_clamp(
+        4.0 * (stop_position - 0.5), 0.0, 1.0);
+    nut_cutoff *= 0.67 + 0.33 * short_stop;
+  }
 #if defined(HLOLLI_WG_VIOLIN_TEST_API)
   nut_cutoff *= string->diagnostic_nut_cutoff_scale;
   bridge_cutoff *= string->diagnostic_bridge_cutoff_scale;
@@ -5722,8 +5728,17 @@ static double wg_violin_bow_edge_tick(WG_VIOLIN_STRING_STATE *string,
   if (fabs(free_slip) <= static_limit) {
     return free_slip;
   }
-  return copysign(fmin(fabs(free_slip), normal_force *
-      wg_violin_friction_mu(string, free_slip) / impedance), free_slip);
+  const double free_speed = fabs(free_slip);
+  const double force_scale = normal_force / impedance;
+  double increment = force_scale * wg_violin_friction_mu(string, free_speed);
+  /* The harmonic touch uses the original bow-edge force during projection. */
+  if (string->harmonic_filter_order == 0U) {
+    increment = force_scale * wg_violin_friction_mu(
+        string, fmax(0.0, free_speed - increment));
+    increment = force_scale * wg_violin_friction_mu(
+        string, fmax(0.0, free_speed - increment));
+  }
+  return copysign(fmin(free_speed, increment), free_slip);
 }
 
 static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,

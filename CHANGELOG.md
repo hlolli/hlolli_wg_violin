@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Increase high-frequency loss at the E-string nut and stopped finger.
+- Account for the string's motion at the second bow edge on ordinary notes.
 - Stabilize the rosin contact memory during bow slip.
 - Time arco and détaché bow unloading to the bow's reversal.
 - Give separate repeated Chaconne notes a fresh bow attack.

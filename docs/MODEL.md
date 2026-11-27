@@ -55,9 +55,10 @@ through silence.
 ## Bow and exciters
 
 The bow uses a main contact and a weaker second edge with a separate
-stick-slip calculation and propagation delay. A small contact-memory term,
-a heat state, and spring-damper hair motion add history. Force, signed speed,
-and position remain live at k-rate.
+stick-slip calculation and propagation delay. The second edge refines its
+sliding force using the slip left after the string responds on ordinary notes.
+A small contact-memory term, a heat state, and spring-damper hair motion add
+history. Force, signed speed, and position remain live at k-rate.
 The rosin memory uses an implicit step during slip so it can relax toward
 its target without stepping past it.
 Light détaché strokes build bow contact more slowly as force drops.
@@ -86,7 +87,9 @@ rapid attacks. Natural and artificial harmonics use the same stored rails.
 
 The model increases high-frequency loss at the stopped finger. The nut-side
 reflection cutoff drops as the vibrating length shortens, up to a fixed
-limit. The pitch solver includes the phase of that reflection.
+limit. The E string adds more loss through the first octave. As its speaking
+length goes from one half to one quarter, that extra loss tapers away.
+The pitch solver includes the phase of the reflection.
 
 The optional A4 constructor value retunes all pitch-linked state together.
 The score still has to send note frequencies in the same tuning.
