@@ -2829,6 +2829,9 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
   stop_position = string->harmonic_natural ? 0.0 :
       wg_violin_stop_position(string->open_frequency, frequency);
   finger_loss = wg_violin_clamp((stop_position - 0.012) / 0.38, 0.0, 1.0);
+  if (string->string_index < 2U) {
+    finger_loss *= 0.35 + 0.65 * finger_loss;
+  }
   nut_cutoff /= 1.0 + profile->stopped_finger_loss * finger_loss;
   if (string->string_index == WG_VIOLIN_STRINGS - 1U) {
     /* Short stops already lose energy faster through more frequent returns. */

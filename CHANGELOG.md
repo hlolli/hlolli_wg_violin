@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep more upper harmonics at shallow stops on the G and D strings.
+- Give the held upper pair of a rolled Chaconne chord one bow distance.
 - Hold the upper pair of selected Chaconne chords until the bare repeat.
 - Ease in bow-pressure recovery to soften late accents on held notes.
 - Use a brief bow-pressure pulse to recover from repeated extra slips.

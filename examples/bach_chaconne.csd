@@ -340,6 +340,7 @@ endin
 
 instr StringController
   iString = int(p4)
+  iRolledBowPosition = 0.098
   if gkFrequency[iString] <= 0 then
     gkFrequency[iString] = giOpenFrequency[iString]
   endif
@@ -462,7 +463,7 @@ instr StringController
 
   ; Keep the chord lead close to the bridge through the roll.
   if iString == kLeadString && gkChordSize[iString] >= 3 then
-    kPosition = 0.11
+    kPosition = iRolledBowPosition
     kSpeed *= 0.96
   endif
 
@@ -473,6 +474,17 @@ instr StringController
   kForce *= gkChordSize[iString] < 3 ? 1.05 : 1.0
   kSpeed = max(-1, min(1, kSpeed * gkBowTravel[iString]))
   kPosition *= 1 - 0.17 * (gkBowTravel[iString] - 1)
+  ; One bow sets the same distance from the bridge for the held upper pair.
+  kHoldStroke = giBachSupportUntilStroke[gkGestureId[iString]]
+  kHeldSupport = kHoldStroke > gkStrokeId && kLeadString == iString + 1 ? 1 : 0
+  kJoinBow portk kHeldSupport, 0.018
+  if kLeadString > 0 then
+    kLeadLength = min(1, giOpenFrequency[kLeadString] / max(20, gkFrequency[kLeadString]))
+    kLeadDistance = iRolledBowPosition * (kLeadLength + 0.35 * (1 - kLeadLength))
+    kLeadDistance *= 1 - 0.17 * (gkBowTravel[kLeadString] - 1)
+    kSharedPosition = kLeadDistance / max(0.40, kSpeakingLengthRatio)
+    kPosition += kJoinBow * (kSharedPosition - kPosition)
+  endif
   aLeft, aRight hlolli_wg_violin \
       kStrokeTrigger, kFrequency, kForce, kSpeed, kPosition, \
       0, 0, gkArticulation[iString], 0, 0, iString, giViolin
