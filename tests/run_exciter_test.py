@@ -832,7 +832,8 @@ def check_open_bow_release(
     failures: List[str], csound: Path, module: Path, csd: Path,
 ) -> None:
     tags = (1, 2, 3, 4, 5)
-    for label, mode in (("open arco", 0), ("open detache", 1)):
+    for label, mode, release_t60 in (("open arco", 0, 0.42),
+                                     ("open detache", 1, 0.38)):
         _, waves, _, _, _, _ = run_case(
             failures, label, csound, module, csd,
             {"TEST_CASE": 8, "TEST_MODE": mode, "TEST_SPEED": 0.55,
@@ -843,9 +844,26 @@ def check_open_bow_release(
         for tag in tags:
             check_wave_common(failures, f"{label} release snapshot {tag}", waves[tag])
         ratios = release_energy_ratios(waves)
-        if not ratios or not (0.02 < ratios[2] < 0.10 and
-                              0.0 < ratios[3] < 0.01):
-            failures.append(f"{label} had unexpected release energy ratios {ratios}")
+        if not ratios or min(ratios) <= 0.0:
+            failures.append(f"{label} lost its release energy")
+            continue
+        # Compare two freely ringing snapshots after the attack and lift.
+        state = waves[4]
+        frequency = value(state, WAVE_FIELDS, "target_frequency")
+        angle = 2.0 * math.pi * frequency / SAMPLE_RATE
+        loop_gain = (value(state, WAVE_FIELDS, "nut_gain") *
+                     value(state, WAVE_FIELDS, "bridge_gain"))
+        passive_rate = -frequency * math.log(loop_gain)
+        for end in ("nut", "bridge"):
+            pole = value(state, WAVE_FIELDS, f"{end}_pole")
+            loop_gain *= (1.0 - pole) / math.hypot(
+                1.0 - pole * math.cos(angle), pole * math.sin(angle))
+        added_rate = 0.01 * max(0.0, math.log(1000.0) / release_t60 - passive_rate)
+        expected = math.exp(0.5 * (frequency * math.log(loop_gain) - added_rate))
+        observed = ratios[3] / ratios[2]
+        if not 0.60 * expected <= observed <= 1.20 * expected:
+            failures.append(f"{label} late energy ratio {observed:.6g}, "
+                            f"expected about {expected:.6g}")
         if any(newer >= older for older, newer in zip(ratios, ratios[1:])):
             failures.append(f"{label} release energy did not fall steadily")
 

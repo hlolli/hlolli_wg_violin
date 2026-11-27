@@ -673,6 +673,8 @@ typedef struct {
   double bow_noise_energy;
   double bow_noise_peak;
   double mechanical_envelope;
+  double mechanical_noise;
+  double mechanical_noise_smoothing;
   double mechanical_decay;
   double board_active_decay;
   double board_inactive_decay;
@@ -2359,6 +2361,7 @@ static void wg_violin_reset_bow_mechanics(
   string->bow_noise_previous_white = 0.0;
   string->bow_noise_last = 0.0;
   string->mechanical_envelope = 0.0;
+  string->mechanical_noise = 0.0;
   string->coupling_input = 0.0;
   string->coupling_source_mask = 0U;
   string->contact_solver_iterations = 0U;
@@ -2497,6 +2500,7 @@ static int32_t wg_violin_bow_mechanics_is_finite(
       isfinite(string->bow_noise_energy) &&
       isfinite(string->bow_noise_peak) &&
       isfinite(string->mechanical_envelope) &&
+      isfinite(string->mechanical_noise) &&
       isfinite(string->mechanical_decay) &&
       isfinite(string->board_active_decay) &&
       isfinite(string->board_inactive_decay) &&
@@ -4903,15 +4907,18 @@ static double wg_violin_bow_mechanics_tick(
         (string->bow_noise_highpass + white -
          string->bow_noise_previous_white);
     string->bow_noise_previous_white = white;
+    string->mechanical_noise = wg_violin_smooth(
+        string->mechanical_noise,
+        0.70 * white + 0.30 * string->bow_noise_highpass,
+        string->mechanical_noise_smoothing);
 #if defined(HLOLLI_WG_VIOLIN_TEST_API)
     noise = string->diagnostic_rosin_gain * noise_level *
         string->bow_noise_highpass +
         string->diagnostic_mechanical_gain * string->mechanical_envelope *
-            (0.70 * white + 0.30 * string->bow_noise_highpass);
+            string->mechanical_noise;
 #else
     noise = noise_level * string->bow_noise_highpass +
-        string->mechanical_envelope *
-            (0.70 * white + 0.30 * string->bow_noise_highpass);
+        string->mechanical_envelope * string->mechanical_noise;
 #endif
     string->mechanical_envelope *= string->mechanical_decay;
     noise = wg_violin_clamp(
@@ -4928,6 +4935,7 @@ static double wg_violin_bow_mechanics_tick(
           string->bow_noise_peak, fabs(noise));
     }
   } else {
+    string->mechanical_noise = 0.0;
     string->bow_noise_last = 0.0;
   }
   return wg_violin_clamp(
@@ -5007,6 +5015,7 @@ static void wg_violin_bow_mechanics_fast_forward_gap(
   string->bow_noise_highpass *= pow(0.94, (double)samples);
   string->bow_noise_previous_white = 0.0;
   string->bow_noise_last = 0.0;
+  string->mechanical_noise = 0.0;
   string->mechanical_contact_positive = 0;
   string->coupling_input = 0.0;
   string->coupling_source_mask = 0U;
@@ -6645,6 +6654,8 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
         profile->bow.contact.thermal_release_seconds, sample_rate);
     string->contact_memory_release = wg_violin_smoothing_coefficient(
         profile->bow.contact.memory_release_seconds, sample_rate);
+    string->mechanical_noise_smoothing =
+        1.0 - exp(-WG_VIOLIN_TWO_PI * 6500.0 / sample_rate);
     string->mechanical_decay = exp(
         -1.0 / fmax(1.0, 0.0045 * sample_rate));
     string->board_active_decay =

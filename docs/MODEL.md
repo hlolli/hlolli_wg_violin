@@ -57,6 +57,8 @@ stick-slip calculation and propagation delay. A small contact-memory term,
 a heat state, and spring-damper hair motion add history. Force, signed speed,
 and position remain live at k-rate.
 Light détaché strokes build bow contact more slowly as force drops.
+Mechanical bow bursts pass through a 6.5 kHz one-pole filter before they
+excite the string.
 
 The same rails also receive normal and left-hand pizzicato, Bartók pizzicato,
 col legno battuto, and col legno tratto. One-shot sounds fire once per rising
