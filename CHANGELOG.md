@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Limit the bandwidth of mechanical bow bursts at the string contact.
+- Limit the bandwidth of arco and détaché bow bursts at the string contact.
 - Shorten the arco and détaché bow lift to a 2 ms contact time constant.
 - Keep the outgoing bow drive as arco and détaché contact fades.
 - Shorten the Chaconne's slur pitch half-time to 1 ms.

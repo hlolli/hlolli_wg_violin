@@ -4901,24 +4901,30 @@ static double wg_violin_bow_mechanics_tick(
         0.0032 * string->bow_contact *
             (0.18 + 0.82 * string->bow_scratch_score) *
             work / (0.020 + work) : 0.0;
+    double burst_noise;
     double noise;
 
     string->bow_noise_highpass = 0.94 *
         (string->bow_noise_highpass + white -
          string->bow_noise_previous_white);
     string->bow_noise_previous_white = white;
-    string->mechanical_noise = wg_violin_smooth(
-        string->mechanical_noise,
-        0.70 * white + 0.30 * string->bow_noise_highpass,
-        string->mechanical_noise_smoothing);
+    burst_noise = 0.70 * white + 0.30 * string->bow_noise_highpass;
+    if (string->articulation <= WG_VIOLIN_ARTICULATION_DETACHE) {
+      string->mechanical_noise = wg_violin_smooth(
+          string->mechanical_noise, burst_noise,
+          string->mechanical_noise_smoothing);
+      burst_noise = string->mechanical_noise;
+    } else {
+      string->mechanical_noise = 0.0;
+    }
 #if defined(HLOLLI_WG_VIOLIN_TEST_API)
     noise = string->diagnostic_rosin_gain * noise_level *
         string->bow_noise_highpass +
         string->diagnostic_mechanical_gain * string->mechanical_envelope *
-            string->mechanical_noise;
+            burst_noise;
 #else
     noise = noise_level * string->bow_noise_highpass +
-        string->mechanical_envelope * string->mechanical_noise;
+        string->mechanical_envelope * burst_noise;
 #endif
     string->mechanical_envelope *= string->mechanical_decay;
     noise = wg_violin_clamp(
