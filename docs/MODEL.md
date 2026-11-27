@@ -98,8 +98,9 @@ reflection cutoff drops as the vibrating length shortens, up to a fixed
 limit. On G and D, shallow stops retain more of the open-string cutoff.
 The stopped D string adds a prompt reflection alongside the slower pad
 response. Both components share the same loop gain.
-The E string adds more loss through the first octave. As its speaking
-length goes from one half to one quarter, that extra loss tapers away.
+The E string adds more loss through the first octave. Its open and shallow
+stopped notes have less of that extra loss. The extra loss also tapers away
+as the speaking length goes from one half to one quarter.
 The pitch solver includes the phase of the reflection.
 
 The optional A4 constructor value retunes all pitch-linked state together.

@@ -2869,7 +2869,9 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
     /* Short stops already lose energy faster through more frequent returns. */
     const double short_stop = wg_violin_clamp(
         4.0 * (stop_position - 0.5), 0.0, 1.0);
-    nut_cutoff *= 0.67 + 0.33 * short_stop;
+    const double near_nut =
+        1.0 - wg_violin_smooth_step(stop_position / 0.19);
+    nut_cutoff *= 0.67 + 0.33 * short_stop + 0.32 * near_nut;
   }
 #if defined(HLOLLI_WG_VIOLIN_TEST_API)
   nut_cutoff *= string->diagnostic_nut_cutoff_scale;
