@@ -81,6 +81,39 @@ def repeated_stroke_releases(rows: list[list[float]]) -> list[int]:
     return releases
 
 
+def chord_support_releases(rows: list[list[float]],
+                           strokes: list[Stroke]) -> dict[int, int]:
+    starts = [stroke.start for stroke in strokes]
+    notes_at = defaultdict(list)
+    for note in rows:
+        notes_at[round(note[0] * DIVISION)].append(note)
+
+    releases = {}
+    for lead in rows:
+        if lead[11] < 3 or not lead[13] or lead[14] != 0:
+            continue
+        boundary = round((lead[0] + lead[1]) * DIVISION)
+        incoming = notes_at.get(boundary, [])
+        if len(incoming) != 1:
+            continue
+        repeat = incoming[0]
+        if (repeat[11] != 1 or repeat[5] or repeat[2:4] != lead[2:4]
+                or repeat[12] != lead[12] or repeat[4] == lead[4]):
+            continue
+        index = bisect_right(starts, repeat[0] + 1e-8) - 1
+        if index < 0:
+            continue
+        stroke = strokes[index]
+        if stroke.chord_size != 1 or not 0 <= repeat[0] - stroke.start <= .012:
+            continue
+        for support in notes_at[round(lead[0] * DIVISION)]:
+            if (support[3] == lead[3] - 1 and support[14] == 1
+                    and support[11] == lead[11]
+                    and round((support[0] + support[1]) * DIVISION) >= boundary):
+                releases[int(support[9])] = stroke.stroke_id
+    return releases
+
+
 def bow_spans(rows: list[list[float]], phrases: list[list[list[float]]],
               strokes: list[Stroke]) -> list[list[list[float]]]:
     joined = {int(row[9]): int(phrase[0][9])
@@ -129,6 +162,13 @@ def render_plan(rows: list[list[float]], strokes: list[Stroke],
     ))
     for gesture in repeated_stroke_releases(rows):
         lines.append(f"giBachRepeatNext[{gesture}] = 1")
+    lines.extend((
+        "",
+        "; Hold the upper pair of a rolled chord until the bare repeat starts.",
+        f"giBachSupportUntilStroke[] init {size}",
+    ))
+    for gesture, stroke in chord_support_releases(rows, strokes).items():
+        lines.append(f"giBachSupportUntilStroke[{gesture}] = {stroke}")
     lines.extend((
         "",
         "; Bow timing in seconds at the demo tempo. The first gesture names the span.",

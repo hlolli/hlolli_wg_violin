@@ -67,8 +67,9 @@ of the smoothed bow speed.
 Arco and détaché bursts pass through a 6.5 kHz one-pole filter before they
 excite the string. For ordinary arco and détaché notes the burst grows with
 slip speed at the start of contact or at bow reversal.
-When ordinary arco or détaché settles into regular extra slips, a 16 ms
-pressure pulse helps the string return to one slip per cycle. The boost
+When ordinary arco or détaché settles into regular extra slips, a 34 ms
+pressure pulse helps the string return to one slip per cycle. Pressure rises
+and falls over 12 ms on each side of the pulse. The boost
 stays below the modeled force limit and leaves the travelling waves in place.
 Bow load reduces the modeled fingerboard clearance, up to the limit at
 0.90 N. The clearance returns as the bow lifts.

@@ -44,7 +44,7 @@
 #define WG_VIOLIN_BOW_DELAY_COMPENSATION_FULL 0.24
 #define WG_VIOLIN_BOW_RECOVERY_FAILURES 8U
 #define WG_VIOLIN_BOW_RECOVERY_SAMPLES 64U
-#define WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS 0.016
+#define WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS 0.034
 #define WG_VIOLIN_BODY_MODES 12U
 #define WG_VIOLIN_BODY_DRIVE_LIMIT 8.0
 #define WG_VIOLIN_BODY_STATE_LIMIT 64.0
@@ -5266,8 +5266,8 @@ static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
       wg_violin_can_recover_bow_pressure(string)) {
     const double remaining = string->bow_pressure_pulse_remaining;
     const double elapsed = WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS - remaining;
-    const double mix = wg_violin_smooth_step(elapsed / 0.002) *
-        wg_violin_smooth_step(remaining / 0.006);
+    const double mix = wg_violin_smooth_step(elapsed / 0.012) *
+        wg_violin_smooth_step(remaining / 0.012);
     string->bow_requested_force = fmax(string->bow_requested_force,
         fmin(string->bow_requested_force * (1.0 + 2.6 * mix),
              0.92 * string->bow_max_force));

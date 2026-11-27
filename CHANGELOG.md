@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hold the upper pair of selected Chaconne chords until the bare repeat.
+- Ease in bow-pressure recovery to soften late accents on held notes.
 - Use a brief bow-pressure pulse to recover from repeated extra slips.
 - Scale arco and détaché bow bursts by slip speed on ordinary notes.
 - Remove unused string state and share the delay solver and profile lookup.

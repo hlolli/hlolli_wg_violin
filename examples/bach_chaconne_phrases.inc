@@ -2563,6 +2563,19 @@ giBachRepeatNext[3087] = 1
 giBachRepeatNext[3118] = 1
 giBachRepeatNext[3121] = 1
 
+; Hold the upper pair of a rolled chord until the bare repeat starts.
+giBachSupportUntilStroke[] init 3124
+giBachSupportUntilStroke[2] = 2
+giBachSupportUntilStroke[11] = 5
+giBachSupportUntilStroke[39] = 15
+giBachSupportUntilStroke[48] = 18
+giBachSupportUntilStroke[56] = 21
+giBachSupportUntilStroke[1478] = 790
+giBachSupportUntilStroke[1486] = 793
+giBachSupportUntilStroke[2473] = 1334
+giBachSupportUntilStroke[3056] = 1653
+giBachSupportUntilStroke[3065] = 1656
+
 ; Bow timing in seconds at the demo tempo. The first gesture names the span.
 giBachBowSpan[] init 3124
 giBachBowElapsed[] init 3124

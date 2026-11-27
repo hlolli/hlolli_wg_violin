@@ -125,6 +125,17 @@ def check_repeats(log: str) -> None:
         assert any(gate > 0 for gate in right[:4]), ('repeat missed its attack', after)
 
 
+def check_chord_repeat(log: str) -> None:
+    trace = read_trace(log)
+    support = [row[2] for row in trace[39]]
+    lead_length = len(trace[40])
+    repeat = [row[2] for row in trace[41]]
+    assert min(support[lead_length - 48:lead_length - 24]) > 0.2, (
+        'support dropped out before the repeat')
+    assert not any(support[lead_length + 4:]), 'support carried into the bare repeat'
+    assert any(gate > 0 for gate in repeat[:4]), 'bare repeat missed its attack'
+
+
 def check_trace(log: str) -> tuple[int, int]:
     rows = score_data.parse_generated(ROOT / 'examples/bach_chaconne_score.inc')
     phrases = phrasing.phrase_plan(rows)
@@ -182,6 +193,10 @@ def main() -> int:
                 args.csound.resolve(), args.module.resolve(), repeat_window, root,
                 f'repeated-notes-{enabled}', (f'INFINITE_BOW={enabled}',))
             check_repeats(repeat_log)
+        _, chord_log = common.render(
+            args.csound.resolve(), args.module.resolve(),
+            window(5, 5, trace=True), root, 'held-chord-repeat')
+        check_chord_repeat(chord_log)
         normal, _ = common.render(args.csound.resolve(), args.module.resolve(),
                                   window(1, 2), root, 'opening', ('INFINITE_BOW=0',))
         unchanged, _ = common.render(args.csound.resolve(), args.module.resolve(),

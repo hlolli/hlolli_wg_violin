@@ -272,6 +272,14 @@ instr BachNote
 
   kChordContact HlolBachChordContact \
       p3, iChordSize, iChordRank, iLead
+  iSupportEndStroke = giBachSupportUntilStroke[iGestureId]
+  if iSupportEndStroke != 0 then
+    iSupportAttack = min(0.008, p3 * 0.16)
+    kSupport linseg 0, iSupportAttack, 0.52, \
+        max(0.001, p3 - iSupportAttack), 0.52
+    kChordContact = gkStrokeId < iSupportEndStroke \
+        ? max(kChordContact, kSupport) : 0
+  endif
   iBowSpan = giBachBowSpan[iGestureId]
   if iPhrase == 0 && giBachPhrase[iGestureId] != 0 then
     iBowSpan = 0
