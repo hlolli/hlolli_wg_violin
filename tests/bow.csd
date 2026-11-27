@@ -296,6 +296,9 @@ instr ScheduleTest
     event_i "i", "BowProbe", 0.255, 0.001, giViolin, 1, 3
     event_i "i", "BowProbe", 0.40, 0.001, giViolin, 1, 4
     event_i "i", "WaveProbe", 0.44, 0.001, giViolin, 1, 1
+  elseif $TEST_CASE == 11 then
+    event_i "i", "Voice", 0, 0.24, \
+        giViolin, 4, 659.25511382574, 1, 0.55, 0.61, 0.11
   endif
 endin
 

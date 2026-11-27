@@ -65,7 +65,11 @@ Light détaché strokes build bow contact more slowly as force drops.
 During an arco or détaché bow change, the contact dip follows the reversal
 of the smoothed bow speed.
 Arco and détaché bursts pass through a 6.5 kHz one-pole filter before they
-excite the string.
+excite the string. For ordinary arco and détaché notes the burst grows with
+slip speed at the start of contact or at bow reversal.
+When ordinary arco or détaché settles into regular extra slips, a 16 ms
+pressure pulse helps the string return to one slip per cycle. The boost
+stays below the modeled force limit and leaves the travelling waves in place.
 Bow load reduces the modeled fingerboard clearance, up to the limit at
 0.90 N. The clearance returns as the bow lifts.
 

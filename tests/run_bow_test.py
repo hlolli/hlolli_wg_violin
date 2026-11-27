@@ -359,6 +359,27 @@ def harmonic_powers(
     return powers
 
 
+def check_octave_recovery(
+    failures: List[str], csound: Path, module: Path, csd: Path,
+) -> None:
+    label = "open E octave recovery"
+    with tempfile.TemporaryDirectory(prefix="hlolli-bow-octave-") as folder:
+        rendered = render(
+            failures, label, csound, module, csd,
+            {"TEST_CASE": 11, "TEST_END": 0.25}, Path(folder) / "open-e.wav")
+    if rendered is None:
+        return
+    steady = rendered[0][int(0.13 * SAMPLE_RATE):int(0.21 * SAMPLE_RATE)]
+    measured, periodicity = period_metrics(steady, 659.25511382574)
+    powers = harmonic_powers(steady, measured, 8)
+    odd = sum(powers[::2])
+    even = sum(powers[1::2])
+    if periodicity < 0.9 or odd <= even:
+        failures.append(
+            "{} did not settle at the requested pitch "
+            "(odd power {:.6g}, even power {:.6g})".format(label, odd, even))
+
+
 def harmonic_centroid(powers: Sequence[float], fundamental: float) -> float:
     total = sum(powers)
     if total <= 0.0:
@@ -917,6 +938,8 @@ def main() -> int:
         check_release(
             failures, arguments.csound, arguments.module, arguments.csd)
         check_recovery(
+            failures, arguments.csound, arguments.module, arguments.csd)
+        check_octave_recovery(
             failures, arguments.csound, arguments.module, arguments.csd)
         check_handoff(
             failures, arguments.csound, arguments.module, arguments.csd)

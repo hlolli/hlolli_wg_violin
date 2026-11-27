@@ -44,6 +44,7 @@
 #define WG_VIOLIN_BOW_DELAY_COMPENSATION_FULL 0.24
 #define WG_VIOLIN_BOW_RECOVERY_FAILURES 8U
 #define WG_VIOLIN_BOW_RECOVERY_SAMPLES 64U
+#define WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS 0.016
 #define WG_VIOLIN_BODY_MODES 12U
 #define WG_VIOLIN_BODY_DRIVE_LIMIT 8.0
 #define WG_VIOLIN_BODY_STATE_LIMIT 64.0
@@ -598,7 +599,6 @@ typedef struct {
   double finger_last_noise;
   double finger_noise_energy;
   double finger_noise_peak;
-  double finger_last_command_frequency;
   double exciter_position;
   double exciter_amplitude;
   double exciter_noise_level;
@@ -726,6 +726,13 @@ typedef struct {
   double gesture_bow_change_step;
   double gesture_tremolo_phase;
   double gesture_tremolo_rate;
+  double bow_slip_interval;
+  double bow_previous_slip_interval;
+  double bow_pressure_contact_age;
+  double bow_pressure_pulse_remaining;
+  double bow_pressure_cooldown;
+  uint32_t bow_short_slip_intervals;
+  int32_t bow_slip_active;
   uint32_t bow_state;
   uint32_t bow_root_count;
   uint32_t bow_solver_iterations;
@@ -738,13 +745,11 @@ typedef struct {
   uint32_t strange_rng;
   int32_t mechanical_last_bow_direction;
   int32_t mechanical_contact_positive;
-  uint32_t strange_last_bow_state;
   uint32_t coupling_source_mask;
   uint32_t finger_rng;
   uint32_t exciter_rng;
   uint32_t finger_motion_kind;
   uint32_t exciter_mode;
-  uint32_t exciter_gate_mode;
   uint32_t exciter_age;
   uint32_t exciter_total_samples;
   uint32_t exciter_pulse_samples;
@@ -2240,37 +2245,6 @@ static double wg_violin_loop_phase_samples(
 }
 
 static double wg_violin_solve_delay(
-    const WG_VIOLIN_STRING_STATE *string, double frequency, double position,
-    double sample_rate)
-{
-  const double wanted = sample_rate / frequency;
-  const WG_VIOLIN_PHASE_FACTORS phase = wg_violin_phase_factors(
-      WG_VIOLIN_TWO_PI * frequency / sample_rate);
-  double low = 2.0;
-  double high = (double)string->rail_size - 2.0;
-  uint32_t iteration;
-
-  if (wg_violin_loop_phase_samples(
-          string, low, position, &phase) >= wanted) {
-    return low;
-  }
-  if (wg_violin_loop_phase_samples(
-          string, high, position, &phase) <= wanted) {
-    return high;
-  }
-  for (iteration = 0U; iteration < 48U; iteration++) {
-    const double middle = 0.5 * (low + high);
-    if (wg_violin_loop_phase_samples(
-            string, middle, position, &phase) < wanted) {
-      low = middle;
-    } else {
-      high = middle;
-    }
-  }
-  return 0.5 * (low + high);
-}
-
-static double wg_violin_solve_harmonic_delay(
     const WG_VIOLIN_STRING_STATE *string, double fundamental_frequency,
     double tuning_frequency, double position, double sample_rate)
 {
@@ -2342,6 +2316,17 @@ static void wg_violin_reset_gesture_live(WG_VIOLIN_STRING_STATE *string)
   string->gesture_command_direction = 0;
 }
 
+static void wg_violin_reset_bow_pressure(WG_VIOLIN_STRING_STATE *string)
+{
+  string->bow_slip_interval = 0.0;
+  string->bow_previous_slip_interval = 0.0;
+  string->bow_pressure_contact_age = 0.0;
+  string->bow_pressure_pulse_remaining = 0.0;
+  string->bow_pressure_cooldown = 0.0;
+  string->bow_short_slip_intervals = 0U;
+  string->bow_slip_active = 0;
+}
+
 static void wg_violin_reset_bow_mechanics(
     WG_VIOLIN_STRING_STATE *string)
 {
@@ -2384,7 +2369,6 @@ static void wg_violin_reset_strange_live(
   string->strange_squeal_state = 0.0;
   string->strange_coupling_mix = 0.0;
   string->strange_last_output = 0.0;
-  string->strange_last_bow_state = WG_VIOLIN_BOW_OFF;
 }
 
 static int32_t wg_violin_strange_live_is_finite(
@@ -2573,6 +2557,7 @@ static void wg_violin_recover_bow_mechanics(
     string->coupling_peak = 0.0;
   }
   wg_violin_reset_bow_mechanics(string);
+  wg_violin_reset_bow_pressure(string);
 }
 
 static void wg_violin_clear_contact_response(
@@ -2613,6 +2598,7 @@ static void wg_violin_reset_bow_live(WG_VIOLIN_STRING_STATE *string)
   string->bow_recovery_remaining = 0U;
   string->bow_direction = 0;
   string->bow_state = WG_VIOLIN_BOW_OFF;
+  wg_violin_reset_bow_pressure(string);
 }
 
 static void wg_violin_reset_exciter_live(WG_VIOLIN_STRING_STATE *string)
@@ -2636,7 +2622,6 @@ static void wg_violin_reset_exciter_live(WG_VIOLIN_STRING_STATE *string)
   string->collision_mass = 0.0;
   string->collision_force = 0.0;
   string->exciter_mode = 0U;
-  string->exciter_gate_mode = 0U;
   string->exciter_age = 0U;
   string->exciter_total_samples = 0U;
   string->exciter_pulse_samples = 0U;
@@ -2877,10 +2862,8 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
         string->nut_pole * sin(omega),
         1.0 - string->nut_pole * cos(omega)) / omega;
   }
-  string->target_delay = tuning_frequency == frequency
-      ? wg_violin_solve_delay(string, frequency, position, sample_rate)
-      : wg_violin_solve_harmonic_delay(
-            string, frequency, tuning_frequency, position, sample_rate);
+  string->target_delay = wg_violin_solve_delay(
+      string, frequency, tuning_frequency, position, sample_rate);
   string->target_delay += bow_delay_compensation;
   string->delay_bow_compensation = bow_delay_compensation;
   wg_violin_split_delay(
@@ -3071,6 +3054,7 @@ static void wg_violin_begin_release(WG_VIOLIN_STRING_STATE *string)
       (WG_VIOLIN_REOPEN_LEVEL * WG_VIOLIN_REOPEN_LEVEL);
   wg_violin_refresh_release_gain_target(string);
   string->exciter_contact_target = 0.0;
+  wg_violin_reset_bow_pressure(string);
 }
 
 static int32_t wg_violin_hold_stopped_release(
@@ -3632,13 +3616,11 @@ static void wg_violin_prepare_finger(WG_VIOLIN_STRING_STATE *string,
     string->finger_position = target;
     string->finger_pressure_target = pressure;
     string->finger_pressure = pressure;
-    string->finger_last_command_frequency = frequency;
     string->finger_initialized = 1;
     return;
   }
   if (fabs(target - string->finger_target_position) <=
       1.0e-12 * (1.0 + fabs(target))) {
-    string->finger_last_command_frequency = frequency;
     return;
   }
   {
@@ -3677,7 +3659,6 @@ static void wg_violin_prepare_finger(WG_VIOLIN_STRING_STATE *string,
   }
   string->finger_target_position = target;
   string->finger_pressure_target = pressure;
-  string->finger_last_command_frequency = frequency;
 }
 
 static double wg_violin_finger_tick(WG_VIOLIN_STRING_STATE *string)
@@ -4051,7 +4032,6 @@ static void wg_violin_prepare_exciter(WG_VIOLIN_STRING_STATE *string,
     if (string->trigger <= 1.0e-7) {
       string->exciter_armed = 1;
     }
-    string->exciter_gate_mode = mode;
     return;
   }
   if (string->exciter_armed) {
@@ -4059,7 +4039,6 @@ static void wg_violin_prepare_exciter(WG_VIOLIN_STRING_STATE *string,
     wg_violin_start_exciter(string, sample_rate);
     string->exciter_armed = 0;
   }
-  string->exciter_gate_mode = mode;
 }
 
 static double wg_violin_exciter_tick(WG_VIOLIN_STRING_STATE *string,
@@ -4911,8 +4890,14 @@ static double wg_violin_bow_mechanics_tick(
         (bowed && direction != 0 &&
          string->mechanical_last_bow_direction != 0 &&
          direction != string->mechanical_last_bow_direction)) {
+      const double slip_speed = fabs(string->bow_relative_velocity);
+      const double impulse_scale =
+          string->articulation <= WG_VIOLIN_ARTICULATION_DETACHE &&
+          string->harmonic_filter_order == 0U
+          ? slip_speed / (0.020 + slip_speed)
+          : 1.0;
       string->mechanical_envelope = fmax(
-          string->mechanical_envelope, 0.008);
+          string->mechanical_envelope, 0.008 * impulse_scale);
       string->mechanical_events = wg_violin_add_samples(
           string->mechanical_events, 1U);
     }
@@ -5075,7 +5060,6 @@ static void wg_violin_strange_fast_forward_gap(
   string->strange_squeal_state *= pow(0.96, (double)samples);
   string->strange_coupling_mix *= pow(0.9995, (double)samples);
   string->strange_last_output = 0.0;
-  string->strange_last_bow_state = WG_VIOLIN_BOW_OFF;
 }
 
 static double wg_violin_bridge_coupling_tick(
@@ -5169,6 +5153,64 @@ static double wg_violin_strange_squeal_frequency(
       13.0 * effective_frequency, floor_frequency, ceiling);
 }
 
+static int32_t wg_violin_can_recover_bow_pressure(
+    const WG_VIOLIN_STRING_STATE *string)
+{
+  return string->release_gate_positive && string->strange == 0.0 &&
+      string->articulation <= WG_VIOLIN_ARTICULATION_DETACHE &&
+      string->harmonic == 0U && string->harmonic_filter_order == 0U &&
+      string->bow_contact > 0.16 &&
+      fabs(string->bow_speed) > 0.025;
+}
+
+static void wg_violin_track_bow_slips(
+    WG_VIOLIN_STRING_STATE *string, double sample_rate)
+{
+  if (!wg_violin_can_recover_bow_pressure(string)) {
+    wg_violin_reset_bow_pressure(string);
+    return;
+  }
+  const double step = 1.0 / sample_rate;
+  const double threshold = fmax(
+      0.035, 0.25 * fabs(string->hair_effective_speed));
+  const double speed = fabs(string->bow_relative_velocity);
+  string->bow_pressure_contact_age = fmin(
+      1.0, string->bow_pressure_contact_age + step);
+  string->bow_pressure_cooldown = fmax(
+      0.0, string->bow_pressure_cooldown - step);
+  string->bow_pressure_pulse_remaining = fmax(
+      0.0, string->bow_pressure_pulse_remaining - step);
+  string->bow_slip_interval = fmin(
+      2.0, string->bow_slip_interval + string->target_frequency / sample_rate);
+  if (string->bow_slip_active) {
+    if (speed < 0.5 * threshold) {
+      string->bow_slip_active = 0;
+    }
+    return;
+  }
+  if (speed < threshold) {
+    return;
+  }
+  string->bow_slip_active = 1;
+  const double interval = string->bow_slip_interval;
+  string->bow_slip_interval = 0.0;
+  /* Use fractions of the current note period so a slur can keep tracking. */
+  if (interval >= 0.20 && interval <= 0.56 &&
+      fabs(interval - string->bow_previous_slip_interval) <= 0.10) {
+    string->bow_short_slip_intervals += string->bow_short_slip_intervals < 16U;
+  } else {
+    string->bow_short_slip_intervals = 0U;
+  }
+  string->bow_previous_slip_interval = interval;
+  if (string->bow_short_slip_intervals >= 8U &&
+      string->bow_pressure_contact_age >= 0.014 &&
+      string->bow_pressure_cooldown <= 0.0) {
+    string->bow_pressure_pulse_remaining = WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS;
+    string->bow_pressure_cooldown = 0.045;
+    string->bow_short_slip_intervals = 0U;
+  }
+}
+
 static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
 {
   const WG_VIOLIN_PROFILE *profile = wg_violin_bound_profile(string);
@@ -5220,6 +5262,16 @@ static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
   string->bow_min_force = minimum * string->bow_contact;
   string->bow_max_force = maximum * string->bow_contact;
   string->bow_requested_force = requested * string->bow_contact;
+  if (string->bow_pressure_pulse_remaining > 0.0 &&
+      wg_violin_can_recover_bow_pressure(string)) {
+    const double remaining = string->bow_pressure_pulse_remaining;
+    const double elapsed = WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS - remaining;
+    const double mix = wg_violin_smooth_step(elapsed / 0.002) *
+        wg_violin_smooth_step(remaining / 0.006);
+    string->bow_requested_force = fmax(string->bow_requested_force,
+        fmin(string->bow_requested_force * (1.0 + 2.6 * mix),
+             0.92 * string->bow_max_force));
+  }
   string->bow_effective_force = fmin(
       string->bow_requested_force,
       2.0 * string->characteristic_impedance *
@@ -5363,7 +5415,6 @@ static double wg_violin_strange_tick(
     string->strange_subharmonic_envelope *= 0.998;
     string->strange_squeal_state *= 0.96;
   }
-  string->strange_last_bow_state = string->bow_state;
   output = wg_violin_clamp(
       air + subharmonic + squeal,
       -WG_VIOLIN_STRANGE_OUTPUT_LIMIT,
@@ -5451,6 +5502,7 @@ static double wg_violin_bow_tick(WG_VIOLIN_STRING_STATE *string,
     string->bow_scratch_score += string->bow_scratch_fall *
         (0.0 - string->bow_scratch_score);
     wg_violin_set_bow_state(string, WG_VIOLIN_BOW_OFF);
+    wg_violin_reset_bow_pressure(string);
     return 0.0;
   }
 
@@ -5679,6 +5731,7 @@ static double wg_violin_bow_tick(WG_VIOLIN_STRING_STATE *string,
   string->bow_max_abs_relative = fmax(
       string->bow_max_abs_relative, fabs(relative));
   wg_violin_set_bow_state(string, state);
+  wg_violin_track_bow_slips(string, sample_rate);
   return increment;
 }
 
@@ -6797,20 +6850,25 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
 
 static int32_t wg_violin_create(
     CSOUND *csound, OPDS *h, MYFLT *out_handle,
-    const WG_VIOLIN_PROFILE *profile, double reference_pitch_hz)
+    const char *profile_name, double reference_pitch_hz)
 {
   WG_VIOLIN_MANAGER *manager = wg_violin_get_manager(csound);
+  const WG_VIOLIN_PROFILE *profile;
   WG_VIOLIN_STATE *state;
   const uint32_t engine_ksmps = wg_violin_engine_ksmps(csound);
-  const uint32_t profile_index = wg_violin_profile_index(profile);
   int32_t handle;
 
   if (UNLIKELY(manager == NULL)) {
     return csound->InitError(
         csound, "hlolli_wg_violin_create: cannot allocate manager\n");
   }
-  if (UNLIKELY(profile == NULL ||
-               profile_index >= manager->profile_count)) {
+  profile = profile_name == NULL ? wg_violin_default_profile()
+                                 : wg_violin_find_profile(profile_name);
+  if (profile == NULL && profile_name != NULL) {
+    return csound->InitError(csound,
+        "hlolli_wg_violin_create: unknown profile \"%s\"\n", profile_name);
+  }
+  if (UNLIKELY(wg_violin_profile_index(profile) >= manager->profile_count)) {
     return csound->InitError(
         csound, "hlolli_wg_violin_create: invalid profile\n");
   }
@@ -6857,7 +6915,7 @@ static int32_t wg_violin_create_init(
     CSOUND *csound, WG_VIOLIN_CREATE *p)
 {
   return wg_violin_create(
-      csound, &p->h, p->handle, wg_violin_default_profile(),
+      csound, &p->h, p->handle, NULL,
       WG_VIOLIN_DEFAULT_REFERENCE_PITCH_HZ);
 }
 
@@ -6868,57 +6926,32 @@ static int32_t wg_violin_create_tuned_init(
       ? (double)*p->reference_pitch_hz : WG_VIOLIN_NAN;
 
   return wg_violin_create(
-      csound, &p->h, p->handle, wg_violin_default_profile(),
-      reference_pitch_hz);
+      csound, &p->h, p->handle, NULL, reference_pitch_hz);
 }
 
 static int32_t wg_violin_create_named_init(
     CSOUND *csound, WG_VIOLIN_CREATE_NAMED *p)
 {
-  const char *name = p->profile_name != NULL &&
-                              p->profile_name->data != NULL
-                          ? p->profile_name->data
-                          : "";
-  WG_VIOLIN_MANAGER *manager = wg_violin_get_manager(csound);
-  const WG_VIOLIN_PROFILE *profile;
+  const STRINGDAT *profile = p->profile_name;
+  const char *name = profile != NULL && profile->data != NULL
+      ? profile->data : "";
 
-  if (UNLIKELY(manager == NULL)) {
-    return csound->InitError(
-        csound, "hlolli_wg_violin_create: cannot allocate manager\n");
-  }
-  profile = wg_violin_find_profile(name);
-  if (profile == NULL) {
-    return csound->InitError(
-        csound, "hlolli_wg_violin_create: unknown profile \"%s\"\n", name);
-  }
   return wg_violin_create(
-      csound, &p->h, p->handle, profile,
+      csound, &p->h, p->handle, name,
       WG_VIOLIN_DEFAULT_REFERENCE_PITCH_HZ);
 }
 
 static int32_t wg_violin_create_named_tuned_init(
     CSOUND *csound, WG_VIOLIN_CREATE_NAMED_TUNED *p)
 {
-  const char *name = p->profile_name != NULL &&
-                              p->profile_name->data != NULL
-                          ? p->profile_name->data
-                          : "";
+  const STRINGDAT *profile = p->profile_name;
+  const char *name = profile != NULL && profile->data != NULL
+      ? profile->data : "";
   const double reference_pitch_hz = p->reference_pitch_hz != NULL
       ? (double)*p->reference_pitch_hz : WG_VIOLIN_NAN;
-  WG_VIOLIN_MANAGER *manager = wg_violin_get_manager(csound);
-  const WG_VIOLIN_PROFILE *profile;
 
-  if (UNLIKELY(manager == NULL)) {
-    return csound->InitError(
-        csound, "hlolli_wg_violin_create: cannot allocate manager\n");
-  }
-  profile = wg_violin_find_profile(name);
-  if (profile == NULL) {
-    return csound->InitError(
-        csound, "hlolli_wg_violin_create: unknown profile \"%s\"\n", name);
-  }
   return wg_violin_create(
-      csound, &p->h, p->handle, profile, reference_pitch_hz);
+      csound, &p->h, p->handle, name, reference_pitch_hz);
 }
 
 static uint32_t wg_violin_preferred_string(

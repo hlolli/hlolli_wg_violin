@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use a brief bow-pressure pulse to recover from repeated extra slips.
+- Scale arco and détaché bow bursts by slip speed on ordinary notes.
+- Remove unused string state and share the delay solver and profile lookup.
 - Increase high-frequency loss at the E-string nut and stopped finger.
 - Account for the string's motion at the second bow edge on ordinary notes.
 - Stabilize the rosin contact memory during bow slip.
