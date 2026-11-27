@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Time arco and détaché bow unloading to the bow's reversal.
 - Give separate repeated Chaconne notes a fresh bow attack.
 - Use bow contact force to set fingerboard clearance.
 - Let stopped arco and détaché notes ring briefly after the bow lifts.

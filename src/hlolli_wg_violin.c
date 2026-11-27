@@ -3554,12 +3554,28 @@ static void wg_violin_gesture_tick(
   if (string->gesture_bow_change_active) {
     const double mix = wg_violin_smooth_step(
         string->gesture_bow_change_mix);
-    const double unload = 1.0 - gesture->bow_change_contact_dip * sin(
-        0.5 * WG_VIOLIN_TWO_PI * string->gesture_bow_change_mix);
+    const double change_phase = string->gesture_bow_change_mix;
+    const double previous_target = string->gesture_bow_change_start_speed;
+    double unload;
 
     string->gesture_bow_change_target_speed = speed;
-    speed = string->gesture_bow_change_start_speed + mix *
-        (speed - string->gesture_bow_change_start_speed);
+    speed = previous_target + mix * (speed - previous_target);
+    if (mode <= WG_VIOLIN_ARTICULATION_DETACHE) {
+      const double live_speed = string->bow_speed +
+          string->bow_speed_smoothing *
+              (profile->bow.speed_scale * speed - string->bow_speed);
+      const double stroke_speed = profile->bow.speed_scale *
+          (live_speed * previous_target > 0.0 ? fabs(previous_target) :
+              fabs(string->gesture_bow_change_target_speed));
+      const double fraction = fabs(live_speed) / fmax(stroke_speed, 0.01);
+      const double edge = wg_violin_smooth_step(8.0 * change_phase) *
+          wg_violin_smooth_step(8.0 * (1.0 - change_phase));
+      unload = 1.0 - gesture->bow_change_contact_dip * edge *
+          (1.0 - wg_violin_smooth_step(fraction));
+    } else {
+      unload = 1.0 - gesture->bow_change_contact_dip *
+          sin(0.5 * WG_VIOLIN_TWO_PI * change_phase);
+    }
     contact *= unload;
     force *= gesture->bow_change_force_floor +
         (1.0 - gesture->bow_change_force_floor) * unload;
