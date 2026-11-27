@@ -91,24 +91,44 @@ def check_plan() -> None:
             for left, right in zip(lane, lane[1:]):
                 if right[5] and abs(left[0] + left[1] - right[0]) < 1e-8:
                     assert membership.get(int(left[9])) == membership.get(int(right[9])), 'written slur cut'
-    # Repeated notes join; gaps, string/voice changes, and accented notes break.
+    # Gaps, string or voice changes, and accented notes break a phrase.
     sample = [list(row) for row in phrases[0][:2]]
-    sample[1][2] = sample[0][2]
-    assert len(phrasing.phrase_plan(sample)) == 1
     for field, delta in ((0, 0.01), (3, 1), (12, 1), (15, 1), (11, 1)):
         changed = [list(row) for row in sample]
         changed[1][field] += delta
         assert not phrasing.phrase_plan(changed), ('unwanted join', field)
+    sample[1][2] = sample[0][2]
+    sample[1][5] = 0
+    assert not phrasing.phrase_plan(sample), 'separate repeated pitches joined'
+    assert phrasing.repeated_stroke_releases(sample) == [int(sample[0][9])]
+    sample[1][5] = 1
+    assert len(phrasing.phrase_plan(sample)) == 1, 'written slur over a repeat cut'
+    assert not phrasing.repeated_stroke_releases(sample), 'bow released within a written slur'
 
 
-def check_trace(log: str) -> tuple[int, int]:
-    rows = score_data.parse_generated(ROOT / 'examples/bach_chaconne_score.inc')
-    phrases = phrasing.phrase_plan(rows)
+def read_trace(log: str) -> dict[int, list[tuple[int, int, float, float, float]]]:
     trace = {}
     for match in re.finditer(r'BACH_PHRASE (\d+) (\d+) (-?\d+) ([^\n]+)', log):
         string, gesture, phrase = map(int, match.group(1, 2, 3))
         gate, speed, depth = map(float, match[4].split())
         trace.setdefault(gesture, []).append((string, phrase, gate, speed, depth))
+    return trace
+
+
+def check_repeats(log: str) -> None:
+    trace = read_trace(log)
+    for before, after in ((993, 994), (995, 996), (1009, 1010), (1019, 1020)):
+        left = [row[2] for row in trace[before]]
+        right = [row[2] for row in trace[after]]
+        assert any(gate > 0 for gate in left[:-6]), ('first note silent', before)
+        assert left[-6:] == [0] * 6, ('bow stayed on the string', before, after)
+        assert any(gate > 0 for gate in right[:4]), ('repeat missed its attack', after)
+
+
+def check_trace(log: str) -> tuple[int, int]:
+    rows = score_data.parse_generated(ROOT / 'examples/bach_chaconne_score.inc')
+    phrases = phrasing.phrase_plan(rows)
+    trace = read_trace(log)
     checked = 0
     vibrato_checked = 0
     for phrase in phrases:
@@ -156,6 +176,12 @@ def main() -> int:
         count += extra_count
         vibrato_count += extra_vibrato
         assert vibrato_count > 5, ('too few vibrato joins', vibrato_count)
+        repeat_window = window(81, 83, trace=True)
+        for enabled in (0, 1):
+            _, repeat_log = common.render(
+                args.csound.resolve(), args.module.resolve(), repeat_window, root,
+                f'repeated-notes-{enabled}', (f'INFINITE_BOW={enabled}',))
+            check_repeats(repeat_log)
         normal, _ = common.render(args.csound.resolve(), args.module.resolve(),
                                   window(1, 2), root, 'opening', ('INFINITE_BOW=0',))
         unchanged, _ = common.render(args.csound.resolve(), args.module.resolve(),

@@ -24,19 +24,21 @@ fraction so the physical distance to the bridge shrinks more slowly.
 The score raises the bow-force control by 5 percent on single notes and
 double stops.
 
-The default `INFINITE_BOW=1` adds 256 continuous phrases, joining 817 note
+The default `INFINITE_BOW=1` adds 264 continuous phrases, joining 782 note
 boundaries in bars 33–56, 65–88, 121–124, 153–164, 217–228, and 241–248.
 This is a performance choice that allows unlimited bow travel. It applies to
 single-voice passages on one physical string. Rest gaps, string changes,
-chords, and dotted short notes stop an added join. Added phrases use four-bar
-groups and can cross barlines; they never split an existing written slur.
-Repeated pitches within a phrase sustain without a new attack.
+chords, dotted short notes, and separate repeated pitches stop an added join.
+Added phrases use four-bar groups and can cross barlines. Written slurs stay
+joined.
 
 Each phrase holds its direction and contact independently of the shared stroke
 events. Its first note uses direct arco with a fresh attack; later notes keep
 the bow and vibrato state. Dynamics still move, with a 10 ms smoothing half-time.
-Only phrase starts and ends lower the gate for one control block. Joined notes
-keep a positive gate. At release, these phrases keep the stopped tail's pitch
+Phrase starts and ends lower the gate for one control block. Joined notes
+keep a positive gate. Before a separate stroke on the same pitch, the bow
+releases up to 9 ms early so the next attack has room to speak. This also
+applies with `INFINITE_BOW=0`. At release, phrases keep the stopped tail's pitch
 and let the body ring. With sympathetic response enabled, other notes wait
 160 ms before retuning to the open string. A new note on the same string
 cancels that retune. Mechanical bursts remain on in the public score.

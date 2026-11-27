@@ -230,6 +230,10 @@ instr BachNote
   giActivePhrase[iString] = iPhrase
   giActivePhraseEnd[iString] = p2 + p3
   iJoinNext = iPhrase != 0 ? giBachJoinNext[iGestureId] : 0
+  iRelease = iPhrase != 0 && iJoinNext == 0 ? ksmps / sr : 0
+  if giBachRepeatNext[iGestureId] != 0 then
+    iRelease = min(0.009, 0.12 * p3)
+  endif
 
   iArticulation = 1
   if iLegato != 0 || iPhrase != 0 then
@@ -282,9 +286,8 @@ instr BachNote
   ; direction after a new stroke has started.
   if gkGestureId[iString] == iGestureId then
     gkTrigger[iString] = iTriggerLevel
-    ; Only phrase attacks and ends release contact for one block.
-    if iPhrase != 0 && ((iContinuation == 0 && timeinstk() == 1) || \
-        (iJoinNext == 0 && timeinsts() >= p3 - ksmps / sr)) then
+    if (iPhrase != 0 && iContinuation == 0 && timeinstk() == 1) || \
+        (iRelease > 0 && kElapsed >= p3 - iRelease) then
       gkTrigger[iString] = 0
     endif
     gkPhrase[iString] = iPhrase

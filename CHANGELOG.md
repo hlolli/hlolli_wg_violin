@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Give separate repeated Chaconne notes a fresh bow attack.
 - Use bow contact force to set fingerboard clearance.
 - Let stopped arco and détaché notes ring briefly after the bow lifts.
 - Limit the bandwidth of arco and détaché bow bursts at the string contact.

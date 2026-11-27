@@ -39,6 +39,7 @@ def phrase_plan(rows: list[list[float]]) -> list[list[list[float]]]:
             joins = (
                 round((previous[0] + previous[1]) * DIVISION) == start
                 and previous[3] == row[3] and previous[12] == row[12]
+                and (previous[2] != row[2] or row[5] != 0)
                 and passage[0] <= previous_bar <= passage[1]
                 and ((bar - passage[0]) // 4 == (previous_bar - passage[0]) // 4
                      or row[5] != 0))
@@ -65,6 +66,19 @@ def phrase_plan(rows: list[list[float]]) -> list[list[list[float]]]:
             if before != after:
                 blocked.update(index for index in (before, after) if index is not None)
     return [phrase for index, phrase in enumerate(phrases) if index not in blocked]
+
+
+def repeated_stroke_releases(rows: list[list[float]]) -> list[int]:
+    previous_by_string = {}
+    releases = []
+    for row in rows:
+        previous = previous_by_string.get(row[3])
+        if (previous is not None and previous[2] == row[2] and row[5] == 0
+                and round((previous[0] + previous[1]) * DIVISION)
+                == round(row[0] * DIVISION)):
+            releases.append(int(previous[9]))
+        previous_by_string[row[3]] = row
+    return releases
 
 
 def bow_spans(rows: list[list[float]], phrases: list[list[list[float]]],
@@ -108,6 +122,13 @@ def render_plan(rows: list[list[float]], strokes: list[Stroke],
             lines.append(f"giBachPhrase[{gesture}] = {number * direction}")
             if index + 1 < len(phrase):
                 lines.append(f"giBachJoinNext[{gesture}] = 1")
+    lines.extend((
+        "",
+        "; Release the bow before a separate stroke on the same pitch.",
+        f"giBachRepeatNext[] init {size}",
+    ))
+    for gesture in repeated_stroke_releases(rows):
+        lines.append(f"giBachRepeatNext[{gesture}] = 1")
     lines.extend((
         "",
         "; Bow timing in seconds at the demo tempo. The first gesture names the span.",
