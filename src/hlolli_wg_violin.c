@@ -562,6 +562,7 @@ typedef struct {
   int32_t bow_delay_active;
   double delay_bow_compensation;
   double nut_pole;
+  double nut_fast_reflection;
   double nut_gain;
   double nut_gain_target;
   double nut_state;
@@ -2233,6 +2234,23 @@ static double wg_violin_reflection_phase_delay(
       1.0 - pole * phase->cos_omega) / phase->omega;
 }
 
+static double wg_violin_nut_phase_delay(
+    const WG_VIOLIN_STRING_STATE *string, const WG_VIOLIN_PHASE_FACTORS *phase)
+{
+  const double pole = string->nut_pole;
+  const double mix = string->nut_fast_reflection;
+  const double delay = wg_violin_reflection_phase_delay(pole, phase);
+  if (mix == 0.0) {
+    return delay;
+  }
+  if (!(phase->omega > 0.0)) {
+    return (1.0 - mix) * delay;
+  }
+  /* The prompt path adds phase lead to the shared one-pole reflection. */
+  return delay - atan2(mix * pole * phase->sin_omega,
+      1.0 - pole + mix * pole * (1.0 - phase->cos_omega)) / phase->omega;
+}
+
 static double wg_violin_loop_phase_samples(
     const WG_VIOLIN_STRING_STATE *string, double delay,
     double position, const WG_VIOLIN_PHASE_FACTORS *phase)
@@ -2243,7 +2261,7 @@ static double wg_violin_loop_phase_samples(
   wg_violin_split_delay(delay, position, &bridge_delay, &nut_delay);
   return wg_violin_cubic_phase_delay(bridge_delay, phase) +
       wg_violin_cubic_phase_delay(nut_delay, phase) +
-      wg_violin_reflection_phase_delay(string->nut_pole, phase) +
+      wg_violin_nut_phase_delay(string, phase) +
       wg_violin_reflection_phase_delay(string->bridge_pole, phase);
 }
 
@@ -2283,6 +2301,15 @@ static double wg_violin_reflection_tick(double input, double pole,
 {
   *state = pole * *state + (1.0 - pole) * input;
   return -gain * *state;
+}
+
+static double wg_violin_nut_reflect(
+    const WG_VIOLIN_STRING_STATE *string, double input, double gain,
+    double *state)
+{
+  const double filtered =
+      wg_violin_reflection_tick(input, string->nut_pole, gain, state);
+  return filtered + string->nut_fast_reflection * (-gain * input - filtered);
 }
 
 static void wg_violin_reset_gesture_live(WG_VIOLIN_STRING_STATE *string)
@@ -2791,6 +2818,8 @@ static void wg_violin_prepare_harmonic(WG_VIOLIN_STRING_STATE *string,
   string->harmonic_initialized = 1;
 }
 
+static double wg_violin_smooth_step(double value);
+
 static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
                                         double frequency,
                                         double sample_rate)
@@ -2848,6 +2877,9 @@ static void wg_violin_prepare_waveguide(WG_VIOLIN_STRING_STATE *string,
 #endif
   nut_cutoff = fmin(nut_cutoff, 0.45 * sample_rate);
   bridge_cutoff = fmin(bridge_cutoff, 0.45 * sample_rate);
+  string->nut_fast_reflection =
+      string->harmonic == 0U && string->string_index == 1U
+          ? 0.55 * wg_violin_smooth_step(stop_position / 0.16) : 0.0;
 
   string->target_frequency = frequency;
   string->delay_tuning_frequency = tuning_frequency;
@@ -5792,7 +5824,7 @@ static double wg_violin_bow_edge_return(
       string->bow_edge_history, string->rail_size, string->nut_write_index,
       string->nut_delay - separation);
 
-  return direct + wg_violin_reflection_tick(incident_nut, string->nut_pole,
+  return direct + wg_violin_nut_reflect(string, incident_nut,
       nut_gain, &string->bow_edge_return_state);
 }
 
@@ -5803,14 +5835,14 @@ static double wg_violin_bow_edge_tick(WG_VIOLIN_STRING_STATE *string,
   const double from_bow = wg_violin_linear_delay_read(
       string->toward_nut, string->rail_size, string->nut_write_index,
       separation);
-  const double from_nut = wg_violin_reflection_tick(
-      wg_violin_linear_delay_read(
+  const double from_nut = wg_violin_nut_reflect(
+      string, wg_violin_linear_delay_read(
           string->toward_nut, string->rail_size, string->nut_write_index,
           string->nut_delay - separation) +
       wg_violin_linear_delay_read(
           string->bow_edge_history, string->rail_size, string->nut_write_index,
           string->nut_delay - 2.0 * separation),
-      string->nut_pole, nut_gain, &string->bow_edge_nut_state);
+      nut_gain, &string->bow_edge_nut_state);
   const double free_slip = string->hair_effective_speed - from_bow - from_nut;
   const double impedance = 2.0 * string->characteristic_impedance;
   const double static_limit = normal_force *
@@ -6019,8 +6051,8 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   if (string->finger_position > WG_VIOLIN_FINGER_STOP_EPSILON) {
     nut_gain *= 0.965 + 0.035 * string->finger_pressure;
   }
-  nut_reflected = wg_violin_reflection_tick(
-      nut_in, string->nut_pole, nut_gain, &string->nut_state);
+  nut_reflected = wg_violin_nut_reflect(
+      string, nut_in, nut_gain, &string->nut_state);
   nut_reflected = wg_violin_clamp(
       nut_reflected + finger_excitation,
       -WG_VIOLIN_WAVE_LIMIT, WG_VIOLIN_WAVE_LIMIT);
@@ -8451,7 +8483,8 @@ static int32_t wg_violin_test_waveguide_init(
       !isfinite(string->target_frequency) || !isfinite(loop_phase) ||
       !isfinite(nut_energy) || !isfinite(bridge_energy) ||
       !isfinite(nut_signature) || !isfinite(bridge_signature) ||
-      !isfinite(string->nut_pole) || !isfinite(string->nut_gain) ||
+      !isfinite(string->nut_pole) || !isfinite(string->nut_fast_reflection) ||
+      !isfinite(string->nut_gain) ||
       !isfinite(string->nut_state) || !isfinite(string->bridge_pole) ||
       !isfinite(string->bridge_gain) || !isfinite(string->bridge_state) ||
       !isfinite(string->release_loop_gain) ||
@@ -8485,6 +8518,7 @@ static int32_t wg_violin_test_waveguide_init(
        (string->delay != 0.0 || string->target_delay != 0.0 ||
         string->target_frequency != 0.0)) ||
       string->nut_pole < 0.0 || string->nut_pole >= 1.0 ||
+      string->nut_fast_reflection < 0.0 || string->nut_fast_reflection > 1.0 ||
       string->bridge_pole < 0.0 || string->bridge_pole >= 1.0 ||
       string->bridge_dynamic_pole < 0.0 ||
       string->bridge_dynamic_pole >= 1.0 ||

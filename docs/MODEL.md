@@ -96,6 +96,8 @@ rapid attacks. Natural and artificial harmonics use the same stored rails.
 The model increases high-frequency loss at the stopped finger. The nut-side
 reflection cutoff drops as the vibrating length shortens, up to a fixed
 limit. On G and D, shallow stops retain more of the open-string cutoff.
+The stopped D string adds a prompt reflection alongside the slower pad
+response. Both components share the same loop gain.
 The E string adds more loss through the first octave. As its speaking
 length goes from one half to one quarter, that extra loss tapers away.
 The pitch solver includes the phase of the reflection.
