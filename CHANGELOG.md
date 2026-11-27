@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Let stopped arco and détaché notes ring briefly after the bow lifts.
 - Limit the bandwidth of arco and détaché bow bursts at the string contact.
 - Shorten the arco and détaché bow lift to a 2 ms contact time constant.
 - Keep the outgoing bow drive as arco and détaché contact fades.

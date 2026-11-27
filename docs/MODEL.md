@@ -45,6 +45,8 @@ holds its pitch when the controller or renderer asks to reopen it after
 release. It reopens once its bridge RMS falls to 0.5 percent of its level at
 release, or after 380 ms. A new bow stroke can change pitch at once.
 Automatic reopening keeps the damping of the stopped note's tail.
+On a stopped arco or détaché release, extra loss rises at lift, then eases
+to let the stopped pitch ring. The normal release loss returns by 99 ms.
 
 Short gaps step the missing samples. Medium gaps use a bounded state update.
 Gaps longer than six seconds clear the rail. State must never remain frozen

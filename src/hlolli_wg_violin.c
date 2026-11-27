@@ -580,6 +580,7 @@ typedef struct {
   double bridge_power_smoothing;
   double reopen_power;
   uint64_t release_start_sample;
+  uint64_t release_wave_start;
   double open_frequency;
   double finger_target_position;
   double finger_position;
@@ -2695,6 +2696,7 @@ static void wg_violin_zero_waveguide(WG_VIOLIN_STRING_STATE *string,
   string->release_profile_articulation = string->articulation;
   string->release_profile_speed = string->speed;
   string->release_gate_positive = 0;
+  string->release_wave_start = UINT64_MAX;
   string->passive_open_level = 0.0;
   string->passive_open_active = 0;
   wg_violin_reset_gesture_live(string);
@@ -3057,6 +3059,7 @@ static void wg_violin_begin_release(WG_VIOLIN_STRING_STATE *string)
 {
   string->release_gate_positive = 0;
   string->release_start_sample = string->last_update_sample;
+  string->release_wave_start = string->wave_samples;
   string->reopen_power = string->bridge_power *
       (WG_VIOLIN_REOPEN_LEVEL * WG_VIOLIN_REOPEN_LEVEL);
   wg_violin_refresh_release_gain_target(string);
@@ -5804,10 +5807,24 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
     string->release_loop_gain = 1.0;
     string->release_loop_gain_target = 1.0;
   } else {
+    double target = string->release_loop_gain_target;
+    if (string->release_wave_start != UINT64_MAX &&
+        string->release_profile_articulation <= WG_VIOLIN_ARTICULATION_DETACHE &&
+        string->harmonic == 0U &&
+        (string->finger_target_position > WG_VIOLIN_FINGER_STOP_EPSILON ||
+         string->passive_open_from_stopped)) {
+      const double age = (double)(string->wave_samples - string->release_wave_start) /
+          sample_rate;
+      if (age < 0.099) {
+        const double ease = wg_violin_smooth_step((age - 0.023) / 0.015);
+        const double restore = wg_violin_smooth_step((age - 0.085) / 0.014);
+        const double share = 1.45 + (0.10 - 1.45) * ease + 0.90 * restore;
+        target = 1.0 - share * (1.0 - target);
+      }
+    }
     string->release_loop_gain = wg_violin_clamp(
         wg_violin_smooth(
-            string->release_loop_gain,
-            string->release_loop_gain_target,
+            string->release_loop_gain, target,
             string->release_gain_smoothing),
         0.0, 1.0);
   }
@@ -6110,6 +6127,7 @@ static void wg_violin_advance_string_gap(WG_VIOLIN_STRING_STATE *string,
   } else {
     const uint64_t exact_limit =
         (uint64_t)WG_VIOLIN_GAP_EXACT_RAILS * string->rail_size;
+    /* The stopped release settles before the two-rail exact gap ends. */
     exact_samples = elapsed < exact_limit ? elapsed : exact_limit;
     for (sample = 0U; sample < exact_samples; sample++) {
       IGN(wg_violin_waveguide_step(string, 0, sample_rate, 0.0));
@@ -6587,6 +6605,7 @@ static WG_VIOLIN_STATE *wg_violin_allocate_state(
         0.004, sample_rate);
     string->release_loop_gain = 1.0;
     string->release_loop_gain_target = 1.0;
+    string->release_wave_start = UINT64_MAX;
     string->release_gain_smoothing = wg_violin_smoothing_coefficient(
         WG_VIOLIN_RELEASE_ENGAGE_SECONDS, sample_rate);
     string->release_profile_speed = string->speed;
