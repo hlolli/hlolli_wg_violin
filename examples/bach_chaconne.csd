@@ -125,6 +125,8 @@ gkTrigger[] init 5
 gkFrequency[] init 5
 gkDynamic[] init 5
 gkBowTravel[] fillarray 1, 1, 1, 1, 1
+gkSlurSpeed[] fillarray 1, 1, 1, 1, 1
+gkSlurForce[] fillarray 1, 1, 1, 1, 1
 gkChordSize[] init 5
 gkChordRank[] init 5
 gkChordContact[] init 5
@@ -289,6 +291,23 @@ instr BachNote
       giBachBowDuration[iBowSpan], giBachBowJoined[iBowSpan], \
       giBachBowSlope[iBowSpan], giBachBowBend[iBowSpan]
 
+  kSlurSpeed init 1
+  kSlurForce init 1
+  ; Shape the joined bows in the late arpeggios from bars 241 to 243.
+  if iPhrase != 0 && iBowSpan >= 2920 && iBowSpan <= 2944 then
+    kSlurPhase limit (giBachBowElapsed[iGestureId] + kElapsed) / \
+        giBachBowDuration[iBowSpan], 0, 1
+    kArc = sin(3.141592653589793 * kSlurPhase)
+    kArc *= kArc
+    kNotePhase limit kElapsed / p3, 0, 1
+    kPull = kNotePhase < 0.26 ? kNotePhase / 0.26 : (1 - kNotePhase) / 0.74
+    kWeight = kNotePhase < 0.17 ? kNotePhase / 0.17 : (1 - kNotePhase) / 0.83
+    kPull = kPull * kPull * (3 - 2 * kPull)
+    kWeight = kWeight * kWeight * (3 - 2 * kWeight)
+    kSlurSpeed = 0.92 + 0.10 * kArc + (0.23 + 0.07 * kArc) * kPull
+    kSlurForce = 0.97 + 0.08 * kArc + (0.14 + 0.03 * kArc) * kWeight
+  endif
+
   gkGestureId[iString] = iGestureId
   ; BachStroke owns the shared bow sign. Held notes must not write an older
   ; direction after a new stroke has started.
@@ -302,6 +321,8 @@ instr BachNote
     gkFrequency[iString] = cpsmidinn(iMidi) * giReferenceRatio
     gkDynamic[iString] = iDynamic
     gkBowTravel[iString] = kBowTravel
+    gkSlurSpeed[iString] = kSlurSpeed
+    gkSlurForce[iString] = kSlurForce
     gkChordSize[iString] = iChordSize
     gkChordRank[iString] = iChordRank
     gkChordContact[iString] = kChordContact
@@ -456,8 +477,8 @@ instr StringController
       kSpeed = -(0.27 + 0.43 * kPhraseDynamic)
       kForce = 0.14 + 0.58 * kPhraseDynamic
     endif
-    kSpeed *= kVoiceSpeed
-    kForce *= kVoiceForce
+    kSpeed *= kVoiceSpeed * gkSlurSpeed[iString]
+    kForce *= kVoiceForce * gkSlurForce[iString]
     kStrokeTrigger = gkTrigger[iString]
   endif
 

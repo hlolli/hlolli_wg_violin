@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Shape bow pressure and speed through the joined arpeggios late in the Chaconne.
 - Ease high bow pressure during recovery from repeated slips.
 - Ease the extra E-string damping near the nut.
 - Add a prompt reflection at the stopped end of the D string.
