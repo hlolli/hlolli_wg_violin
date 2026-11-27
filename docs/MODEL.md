@@ -58,6 +58,8 @@ The bow uses a main contact and a weaker second edge with a separate
 stick-slip calculation and propagation delay. A small contact-memory term,
 a heat state, and spring-damper hair motion add history. Force, signed speed,
 and position remain live at k-rate.
+The rosin memory uses an implicit step during slip so it can relax toward
+its target without stepping past it.
 Light détaché strokes build bow contact more slowly as force drops.
 During an arco or détaché bow change, the contact dip follows the reversal
 of the smoothed bow speed.

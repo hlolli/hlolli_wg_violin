@@ -4776,8 +4776,9 @@ static double wg_violin_contact_memory_tick(
             WG_VIOLIN_TWO_PI * 0.5 * position);
       }
     }
-    velocity = relative_velocity *
-        (1.0 - adhesion * old_memory / steady);
+    const double relaxation = relative_velocity * adhesion / steady;
+    velocity = (relative_velocity - relaxation * old_memory) /
+        (1.0 + relaxation / sample_rate);
     velocity = wg_violin_clamp(
         velocity, -WG_VIOLIN_FRICTION_MAX_SPEED,
         WG_VIOLIN_FRICTION_MAX_SPEED);
