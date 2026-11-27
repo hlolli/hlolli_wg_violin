@@ -46,6 +46,7 @@
 #define WG_VIOLIN_BOW_RECOVERY_SAMPLES 64U
 #define WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS 0.034
 #define WG_VIOLIN_BODY_MODES 12U
+#define WG_VIOLIN_BRIDGE_HILL_MODE 9U
 #define WG_VIOLIN_BODY_DRIVE_LIMIT 8.0
 #define WG_VIOLIN_BODY_STATE_LIMIT 64.0
 #define WG_VIOLIN_BODY_OUTPUT_LIMIT 4.0
@@ -359,6 +360,8 @@ typedef struct {
   double left_gain;
   double right_gain;
   double brightness;
+  double radiated_real;
+  double radiated_imaginary;
   double source_gain[WG_VIOLIN_STRINGS];
   int32_t active;
 } WG_VIOLIN_BODY_MODE_STATE;
@@ -4287,6 +4290,16 @@ static void wg_violin_prepare_body(WG_VIOLIN_STATE *state)
       mode->radius = 0.0;
       mode->target_gain = 0.0;
     }
+    if (mode->active && mode_index == WG_VIOLIN_BRIDGE_HILL_MODE) {
+      const double velocity_share = 0.75;
+      const double half_cosine = sqrt(0.5 * (1.0 + mode->cosine));
+
+      /* Match the velocity term to the sine response at the mode frequency. */
+      mode->radiated_real = velocity_share * mode->radius * half_cosine;
+      mode->radiated_imaginary = 1.0 - velocity_share -
+          velocity_share * half_cosine *
+              (1.0 - mode->radius * mode->cosine) / mode->sine;
+    }
   }
 }
 
@@ -4320,7 +4333,12 @@ static void wg_violin_body_current_output(const WG_VIOLIN_STATE *state,
 
   for (mode_index = 0U; mode_index < WG_VIOLIN_BODY_MODES; mode_index++) {
     const WG_VIOLIN_BODY_MODE_STATE *mode = &state->body_modes[mode_index];
-    const double output = 2.0 * mode->gain * mode->imaginary;
+    const double radiated =
+        mode_index == WG_VIOLIN_BRIDGE_HILL_MODE && mode->active
+            ? mode->radiated_real * mode->real +
+                mode->radiated_imaginary * mode->imaginary
+            : mode->imaginary;
+    const double output = 2.0 * mode->gain * radiated;
     sum_left += mode->left_gain * output;
     sum_right += mode->right_gain * output;
   }
@@ -4345,6 +4363,7 @@ static int32_t wg_violin_body_state_is_finite(
     uint32_t string_index;
 
     if (!isfinite(mode->real) || !isfinite(mode->imaginary) ||
+        !isfinite(mode->radiated_real) || !isfinite(mode->radiated_imaginary) ||
         !isfinite(mode->radius) || !isfinite(mode->cosine) ||
         !isfinite(mode->sine) || !isfinite(mode->gain) ||
         !isfinite(mode->target_gain) || !isfinite(mode->left_gain) ||

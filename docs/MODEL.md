@@ -105,6 +105,8 @@ The score still has to send note frequencies in the same tuning.
 The body is a one-way bridge-force to radiation model. It has twelve complex
 modes from 265 Hz to 4.35 kHz. The 3.3 and 4.35 kHz modes use separate input
 gains for each string. Fixed left and right gains give a stable stereo view.
+The 2.35 kHz bridge hill mode blends its sine output with a velocity
+projection. The velocity term has zero response to steady force.
 Mode phase, smoothed gain, and decay live on the handle.
 
 `kBody` changes wet amount, tone, and decay. `kMute` lowers and darkens the
