@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Ease high bow pressure during recovery from repeated slips.
 - Ease the extra E-string damping near the nut.
 - Add a prompt reflection at the stopped end of the D string.
 - Use more bow pressure on slowly bowed stopped G and D strings with higher finger loss.

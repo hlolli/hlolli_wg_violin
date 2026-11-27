@@ -5333,6 +5333,8 @@ static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
   }
   string->bow_min_force = minimum * string->bow_contact;
   string->bow_max_force = maximum * string->bow_contact;
+  const double solver_limit = 2.0 * string->characteristic_impedance *
+      WG_VIOLIN_FRICTION_MAX_SPEED / static_mu;
   string->bow_requested_force = requested * string->bow_contact;
   if (string->bow_pressure_pulse_remaining > 0.0 &&
       wg_violin_can_recover_bow_pressure(string)) {
@@ -5340,14 +5342,21 @@ static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
     const double elapsed = WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS - remaining;
     const double mix = wg_violin_smooth_step(elapsed / 0.012) *
         wg_violin_smooth_step(remaining / 0.012);
-    string->bow_requested_force = fmax(string->bow_requested_force,
-        fmin(string->bow_requested_force * (1.0 + 2.6 * mix),
+    const double requested_force = string->bow_requested_force;
+    /* Ease a loaded bow during firm partial contact. */
+    const double partial =
+        wg_violin_smooth_step((string->bow_contact - 0.64) / 0.07) *
+        (1.0 - wg_violin_smooth_step((string->bow_contact - 0.80) / 0.15));
+    const double unload = partial * wg_violin_smooth_step(
+        (requested_force / solver_limit - 0.50) / 0.25);
+    const double raised = fmax(requested_force,
+        fmin(requested_force * (1.0 + 2.6 * mix),
              0.92 * string->bow_max_force));
+    const double relaxed = requested_force * (1.0 - 0.65 * mix);
+    string->bow_requested_force = raised + unload * (relaxed - raised);
   }
   string->bow_effective_force = fmin(
-      string->bow_requested_force,
-      2.0 * string->characteristic_impedance *
-          WG_VIOLIN_FRICTION_MAX_SPEED / static_mu);
+      string->bow_requested_force, solver_limit);
   if (string->strange < 0.0) {
     const double amount = -string->strange;
     const double weak = wg_violin_clamp(
