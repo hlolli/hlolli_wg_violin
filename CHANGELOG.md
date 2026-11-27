@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Use more bow pressure on slowly bowed stopped G and D strings with higher finger loss.
 - Use bridge motion for more of the 2.35 kHz body mode output.
 - Keep more upper harmonics at shallow stops on the G and D strings.
 - Give the held upper pair of a rolled Chaconne chord one bow distance.

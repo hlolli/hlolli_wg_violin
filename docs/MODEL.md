@@ -71,6 +71,9 @@ When ordinary arco or détaché settles into regular extra slips, a 34 ms
 pressure pulse helps the string return to one slip per cycle. Pressure rises
 and falls over 12 ms on each side of the pulse. The boost
 stays below the modeled force limit and leaves the travelling waves in place.
+A slow, settled stroke on a stopped G or D string can use more pressure when
+the finger end reflects less than the bridge. The added pressure tapers out
+as the bow moves faster and stays below the normal force limit.
 Bow load reduces the modeled fingerboard clearance, up to the limit at
 0.90 N. The clearance returns as the bow lifts.
 

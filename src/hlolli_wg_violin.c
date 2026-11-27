@@ -5281,6 +5281,22 @@ static void wg_violin_map_bow_force(WG_VIOLIN_STRING_STATE *string)
                         log(force_map->normal_max_scale * maximum) +
                     mix * log(high));
   }
+
+  if (string->string_index < 2U && string->harmonic == 0U &&
+      string->strange == 0.0 &&
+      string->articulation <= WG_VIOLIN_ARTICULATION_DETACHE) {
+    const double speed = fabs(string->bow_speed);
+    const double stopped = wg_violin_smooth_step(
+        8.0 * string->finger_target_position);
+    const double speed_window =
+        wg_violin_smooth_step((speed - 0.14) / 0.10) *
+        (1.0 - wg_violin_smooth_step((speed - 0.348) / 0.03));
+    const double settled = wg_violin_smooth_step(
+        (string->bow_pressure_contact_age - 0.07) / 0.06);
+    const double loss = fmax(0.0, string->nut_pole - string->bridge_pole);
+    const double boost = 10 * loss * stopped * speed_window * settled;
+    requested = fmax(requested, fmin(0.92 * maximum, requested * (1.0 + boost)));
+  }
   string->bow_min_force = minimum * string->bow_contact;
   string->bow_max_force = maximum * string->bow_contact;
   string->bow_requested_force = requested * string->bow_contact;
