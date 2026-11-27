@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use bridge motion for the 3.3 kHz body mode and add texture to settled
+  D-string bow contact.
 - Shape bow pressure and speed through the joined arpeggios late in the Chaconne.
 - Ease high bow pressure during recovery from repeated slips.
 - Ease the extra E-string damping near the nut.

@@ -4324,7 +4324,8 @@ static void wg_violin_prepare_body(WG_VIOLIN_STATE *state)
       mode->radius = 0.0;
       mode->target_gain = 0.0;
     }
-    if (mode->active && mode_index == WG_VIOLIN_BRIDGE_HILL_MODE) {
+    if (mode->active && mode_index >= WG_VIOLIN_BRIDGE_HILL_MODE &&
+        mode_index <= WG_VIOLIN_BRIDGE_HILL_MODE + 1U) {
       const double velocity_share = 0.75;
       const double half_cosine = sqrt(0.5 * (1.0 + mode->cosine));
 
@@ -4368,7 +4369,8 @@ static void wg_violin_body_current_output(const WG_VIOLIN_STATE *state,
   for (mode_index = 0U; mode_index < WG_VIOLIN_BODY_MODES; mode_index++) {
     const WG_VIOLIN_BODY_MODE_STATE *mode = &state->body_modes[mode_index];
     const double radiated =
-        mode_index == WG_VIOLIN_BRIDGE_HILL_MODE && mode->active
+        mode_index >= WG_VIOLIN_BRIDGE_HILL_MODE &&
+            mode_index <= WG_VIOLIN_BRIDGE_HILL_MODE + 1U && mode->active
             ? mode->radiated_real * mode->real +
                 mode->radiated_imaginary * mode->imaginary
             : mode->imaginary;
@@ -4761,10 +4763,21 @@ static void wg_violin_hair_tick(WG_VIOLIN_STRING_STATE *string,
       string->hair_displacement + string->hair_velocity / sample_rate,
       -WG_VIOLIN_HAIR_DISPLACEMENT_LIMIT,
       WG_VIOLIN_HAIR_DISPLACEMENT_LIMIT);
-  string->hair_effective_speed = wg_violin_clamp(
-      string->bow_speed +
-          contact->hair_contact_mix * string->hair_velocity,
-      -1.25, 1.25);
+  double surface_speed = string->bow_speed +
+      contact->hair_contact_mix * string->hair_velocity;
+  if (string->release_gate_positive &&
+      !string->gesture_bow_change_active &&
+      string->articulation == WG_VIOLIN_ARTICULATION_ARCO &&
+      string->finger_pressure > 0.95 &&
+      string->string_index == 1U && string->harmonic_filter_order == 0U &&
+      string->strange == 0.0) {
+    /* Let the hair speed vary slightly on the stopped D string. */
+    const double settled = wg_violin_smooth_step(
+        (string->bow_pressure_contact_age - 0.12) / 0.08);
+    surface_speed += 0.22 * settled * string->bow_contact *
+        string->bow_speed * string->mechanical_noise;
+  }
+  string->hair_effective_speed = wg_violin_clamp(surface_speed, -1.25, 1.25);
 }
 
 static double wg_violin_contact_memory_tick(

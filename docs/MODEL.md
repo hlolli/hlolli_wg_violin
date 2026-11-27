@@ -59,6 +59,8 @@ stick-slip calculation and propagation delay. The second edge refines its
 sliding force using the slip left after the string responds on ordinary notes.
 A small contact-memory term, a heat state, and spring-damper hair motion add
 history. Force, signed speed, and position remain live at k-rate.
+On a stopped D string under a settled arco stroke, a small variation in hair
+speed carries bow texture into the contact solver.
 The rosin memory uses an implicit step during slip so it can relax toward
 its target without stepping past it.
 Light détaché strokes build bow contact more slowly as force drops.
@@ -112,8 +114,9 @@ The score still has to send note frequencies in the same tuning.
 The body is a one-way bridge-force to radiation model. It has twelve complex
 modes from 265 Hz to 4.35 kHz. The 3.3 and 4.35 kHz modes use separate input
 gains for each string. Fixed left and right gains give a stable stereo view.
-The 2.35 kHz bridge hill mode blends its sine output with a velocity
-projection. The velocity term has zero response to steady force.
+The 2.35 and 3.3 kHz body modes blend their sine output with a velocity
+projection.
+The velocity term has zero response to steady force.
 Mode phase, smoothed gain, and decay live on the handle.
 
 `kBody` changes wet amount, tone, and decay. `kMute` lowers and darkens the
