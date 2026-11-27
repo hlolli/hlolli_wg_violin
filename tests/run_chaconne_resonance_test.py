@@ -22,8 +22,8 @@ RATE = 48000
 FFT_SIZE = 8192
 # 665 Hz is close to the open E5 fundamental at 659.3 Hz.  With a fixed body
 # level that musical partial dominates the local ratio, so it is not a body
-# transfer check.  Keep the two separated modes as the regression targets.
-MODE_LIMITS = ((1320.0, 24.0, 8.0), (3300.0, 60.0, 8.0))
+# transfer check. Keep the two separated modes and the old 3.3 kHz region.
+MODE_LIMITS = ((1320.0, 24.0, 8.0), (3200.0, 60.0, 8.0), (3300.0, 60.0, 8.0))
 
 
 def check_fixed_bus(csd: Path) -> None:

@@ -210,11 +210,11 @@
       { "frequency_hz": 820.0, "bandwidth_hz": 55.0, "gain": 0.5200, "pan": -0.22 },
       { "frequency_hz": 1040.0, "bandwidth_hz": 80.0, "gain": 0.30000000000000004, "pan": 0.22 },
       { "frequency_hz": 1320.0, "bandwidth_hz": 120.0, "gain": 0.255, "pan": -0.26 },
-      { "frequency_hz": 1710.0, "bandwidth_hz": 180.0, "gain": 0.23249999999999998, "pan": 0.26 },
-      { "frequency_hz": 2350.0, "bandwidth_hz": 420.0, "gain": 0.5000, "pan": -0.30 },
+      { "frequency_hz": 1710.0, "bandwidth_hz": 180.0, "gain": 0.3100, "pan": 0.26 },
+      { "frequency_hz": 2350.0, "bandwidth_hz": 285.6, "gain": 1.1625, "pan": -0.30 },
       {
-        "frequency_hz": 3300.0, "bandwidth_hz": 650.0, "gain": 1.08, "pan": 0.30,
-        "source_gains": [0.3975, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001]
+        "frequency_hz": 3200.0, "bandwidth_hz": 325.0, "gain": 1.08, "pan": 0.30,
+        "source_gains": [0.659850, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001]
       },
       {
         "frequency_hz": 4350.0, "bandwidth_hz": 1100.0, "gain": 0.486, "pan": -0.24,

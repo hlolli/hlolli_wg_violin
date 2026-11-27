@@ -2,8 +2,12 @@
 
 ## Unreleased
 
-- Use bridge motion for the 3.3 kHz body mode and add texture to settled
-  D-string bow contact.
+- Strengthen and narrow radiation from the 2.35 kHz bridge mode.
+- Add bow hair texture to settled strokes on the stopped G string.
+- Use velocity radiation for the 1.71 kHz body mode and restore its gain.
+- Use bridge motion for the 430 Hz body mode.
+- Strengthen G-string radiation around 3.2 kHz.
+- Add texture to settled D-string bow contact.
 - Shape bow pressure and speed through the joined arpeggios late in the Chaconne.
 - Ease high bow pressure during recovery from repeated slips.
 - Ease the extra E-string damping near the nut.
