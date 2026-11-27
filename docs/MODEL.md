@@ -61,6 +61,8 @@ and position remain live at k-rate.
 Light détaché strokes build bow contact more slowly as force drops.
 Arco and détaché bursts pass through a 6.5 kHz one-pole filter before they
 excite the string.
+Bow load reduces the modeled fingerboard clearance, up to the limit at
+0.90 N. The clearance returns as the bow lifts.
 
 The same rails also receive normal and left-hand pizzicato, Bartók pizzicato,
 col legno battuto, and col legno tratto. One-shot sounds fire once per rising

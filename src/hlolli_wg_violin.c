@@ -75,6 +75,7 @@
 #define WG_VIOLIN_COUPLING_DELAY 128U
 #define WG_VIOLIN_BRIDGE_MAX_BANKS (WG_VIOLIN_COUPLING_DELAY + 2U)
 #define WG_VIOLIN_BOARD_CLEARANCE 0.00065
+#define WG_VIOLIN_BOARD_FULL_BOW_LOAD 0.90
 #define WG_VIOLIN_BOARD_DISPLACEMENT_LIMIT 0.004
 #define WG_VIOLIN_BOARD_STIFFNESS 350000.0
 #define WG_VIOLIN_BOARD_DAMPING 90.0
@@ -4841,8 +4842,10 @@ static double wg_violin_bow_mechanics_tick(
       -WG_VIOLIN_BOARD_DISPLACEMENT_LIMIT,
       WG_VIOLIN_BOARD_DISPLACEMENT_LIMIT);
   {
+    const double normal_load =
+        contact_positive ? string->bow_effective_force : 0.0;
     const double force_control = wg_violin_clamp(
-        string->force, 0.0, 1.0);
+        normal_load / WG_VIOLIN_BOARD_FULL_BOW_LOAD, 0.0, 1.0);
     const double force_squared = force_control * force_control;
     const double clearance = WG_VIOLIN_BOARD_CLEARANCE *
         (1.0 - 0.75 * force_squared * force_squared);
