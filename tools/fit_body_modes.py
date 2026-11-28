@@ -183,8 +183,8 @@ def check_profiles(
             modes = profile["body"]["modes"]
         except (KeyError, TypeError):
             fail(f"{path} has no body mode array")
-        if not isinstance(modes, list) or len(modes) != 12:
-            fail(f"{path} must contain twelve body modes")
+        if not isinstance(modes, list) or len(modes) != 17:
+            fail(f"{path} must contain seventeen body modes")
         for index, expected in enumerate(expected_modes):
             actual = modes[index]
             for key in ("frequency_hz", "bandwidth_hz", "gain"):

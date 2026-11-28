@@ -92,7 +92,7 @@ commands.
 - Natural and artificial harmonics.
 - Smooth pitch changes and same-string legato.
 - Open-string sympathy through the bridge.
-- A twelve-mode violin body with a stereo return.
+- A seventeen-mode violin body with a stereo return.
 - Per-handle state, so two players do not share phase or noise.
 - Finite-state checks and bounded recovery paths.
 

@@ -45,11 +45,16 @@
 #define WG_VIOLIN_BOW_RECOVERY_FAILURES 8U
 #define WG_VIOLIN_BOW_RECOVERY_SAMPLES 64U
 #define WG_VIOLIN_BOW_PRESSURE_PULSE_SECONDS 0.034
-#define WG_VIOLIN_BODY_MODES 12U
+#define WG_VIOLIN_BODY_MODES 17U
 #define WG_VIOLIN_BODY_MODE_430_HZ 2U
-#define WG_VIOLIN_BODY_MODE_1710_HZ 8U
-#define WG_VIOLIN_BODY_MODE_3200_HZ 10U
-#define WG_VIOLIN_BODY_MODE_4010_HZ 11U
+#define WG_VIOLIN_BODY_MODE_1033_HZ 7U
+#define WG_VIOLIN_BODY_MODE_1079_HZ 8U
+#define WG_VIOLIN_BODY_MODE_1097_HZ 9U
+#define WG_VIOLIN_BODY_MODE_1710_HZ 11U
+#define WG_VIOLIN_BODY_MODE_LOW_2KHZ 12U
+#define WG_VIOLIN_BODY_MODE_HIGH_2KHZ 13U
+#define WG_VIOLIN_BODY_MODE_3300_HZ 15U
+#define WG_VIOLIN_BODY_MODE_4010_HZ 16U
 #define WG_VIOLIN_BODY_DRIVE_LIMIT 8.0
 #define WG_VIOLIN_BODY_STATE_LIMIT 64.0
 #define WG_VIOLIN_BODY_OUTPUT_LIMIT 4.0
@@ -379,7 +384,7 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
     .id = "generic_violin",
     .display_name = "Generic Violin",
     .source_sha256 =
-        "69607c20b215bee7eabefced24bc62f57af3dabccc5bb364f6c915160697fef4",
+        "101af9fb15d00553bbf598cd9e4d13c3dfdfe2889c21874f84639df93a7f256f",
     .strings = {
         {0.55, 0.25, 20000.0, 5386.995271806526, 0.25, 1.32},
         {0.42, 0.25, 4200.0, 6056.378022952718, 0.25, 1.35},
@@ -442,16 +447,21 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
         .modes = {
             {265.0, 15.0, 0.6310, 0.0, {1.0, 1.0, 1.0, 1.0}},
             {395.0, 25.0, 0.2818, -0.10, {1.0, 1.0, 1.0, 1.0}},
-            {430.0, 20.0, 0.3981, 0.08, {1.0, 1.0, 1.0, 1.0}},
+            {430.0, 20.0, 0.3981, 0.08, {2.58, 1.0, 1.0, 1.0}},
             {550.0, 30.0, 0.7079, -0.16, {1.0, 1.0, 1.0, 1.0}},
-            {665.0, 30.0, 1.0000, 0.16, {1.0, 1.0, 1.0, 0.72}},
-            {820.0, 55.0, 0.5200, -0.22, {1.0, 1.0, 0.3, 0.68}},
-            {1040.0, 80.0, 0.30000000000000004, 0.22, {1.0, 1.0, 1.0, 1.0}},
-            {1320.0, 120.0, 0.255, -0.26, {1.0, 1.0, 1.0, 1.0}},
-            {1710.0, 180.0, 0.3100, 0.26, {1.0, 1.0, 1.0, 1.0}},
-            {2350.0, 285.6, 1.1625, -0.30, {1.0, 1.0, 1.0, 1.65}},
-            {3200.0, 325.0, 1.08, 0.30, {0.659850, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001}},
-            {4010.0, 760.0, 0.7776, -0.24, {0.2893518518518518, 0.5787037037037036, 0.625, 3.85}},
+            {665.0, 30.0, 1.0000, 0.16, {0.88, 1.0, 1.0, 0.72}},
+            {810.0, 42.0, 0.5200, -0.22, {1.05, 1.0, 0.3, 0.68}},
+            {878.0, 16.0, 0.14, -0.22, {1.57, 0.15, 0.15, 0.15}},
+            {1033.0, 64.0, 0.335, 0.22, {0.817723, 1.0, 1.0, 1.0}},
+            {1078.658949, 27.420699, 0.177452, 0.18, {1.0, 0.06, 0.06, 0.06}},
+            {1096.887273, 4.915355, 0.051527, -0.12, {1.0, 0.06, 0.06, 0.06}},
+            {1320.0, 120.0, 0.255, -0.26, {0.989913, 1.0, 1.0, 1.0}},
+            {1710.0, 180.0, 0.3100, 0.26, {1.5, 1.0, 1.0, 1.0}},
+            {1968.33208694, 14.18034666, 0.16857919, -0.14, {1.0, 0.12, 0.12, 0.12}},
+            {1985.26973931, 8.37242926, 0.68557468, 0.20, {1.0, 0.12, 0.12, 0.12}},
+            {2320.0, 318.0, 1.1625, -0.30, {0.93410413, 1.0, 1.0, 1.65}},
+            {3300.0, 240.0, 1.08, 0.30, {0.659850, 0.7000000000000001, 0.6541666666666667, 1.15}},
+            {4010.0, 760.0, 0.972000, -0.24, {0.23148148148148144, 0.46296296296296288, 0.5, 3.85}},
         },
     },
 };
@@ -562,6 +572,7 @@ typedef struct {
   double delay_position;
   double delay_velocity;
   double delay_velocity_smoothing;
+  double vibrato_delay_offset;
   int32_t bow_delay_active;
   double delay_bow_compensation;
   double nut_pole;
@@ -2698,6 +2709,7 @@ static void wg_violin_zero_waveguide(WG_VIOLIN_STRING_STATE *string,
   string->bridge_power = 0.0;
   string->reopen_power = 0.0;
   string->delay_velocity = 0.0;
+  string->vibrato_delay_offset = 0.0;
   string->finger_noise_envelope = 0.0;
   string->finger_noise_highpass = 0.0;
   string->finger_noise_previous_white = 0.0;
@@ -4343,14 +4355,27 @@ static void wg_violin_prepare_body(WG_VIOLIN_STATE *state)
       mode->target_gain = 0.0;
     }
     if (mode->active && (mode_index == WG_VIOLIN_BODY_MODE_430_HZ ||
+        mode_index == WG_VIOLIN_BODY_MODE_1033_HZ ||
+        mode_index == WG_VIOLIN_BODY_MODE_1079_HZ ||
+        mode_index == WG_VIOLIN_BODY_MODE_1097_HZ ||
         mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ)) {
       const double half_cosine = sqrt(0.5 * (1.0 + mode->cosine));
       double velocity_share =
-          mode_index == WG_VIOLIN_BODY_MODE_430_HZ ? 0.75 : 1.0;
-      if (mode_index == WG_VIOLIN_BODY_MODE_3200_HZ) {
+          mode_index == WG_VIOLIN_BODY_MODE_430_HZ ? 0.54 : 1.0;
+      if (mode_index == WG_VIOLIN_BODY_MODE_1033_HZ) {
+        velocity_share = 0.123;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_1079_HZ) {
+        velocity_share = 0.487177;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_1097_HZ) {
+        velocity_share = 0.506283;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_LOW_2KHZ) {
+        velocity_share = 0.33269335;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_HIGH_2KHZ) {
+        velocity_share = 0.84371271;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_3300_HZ) {
         velocity_share = 0.88;
       } else if (mode_index == WG_VIOLIN_BODY_MODE_4010_HZ) {
-        velocity_share = 0.46;
+        velocity_share = 0.60;
       }
 
       /* Match the velocity term to the sine response at the mode frequency. */
@@ -4358,6 +4383,11 @@ static void wg_violin_prepare_body(WG_VIOLIN_STATE *state)
       mode->radiated_imaginary = 1.0 - velocity_share -
           velocity_share * half_cosine *
               (1.0 - mode->radius * mode->cosine) / mode->sine;
+      /* The lower mode moves air in opposite polarity. */
+      if (mode_index == WG_VIOLIN_BODY_MODE_LOW_2KHZ) {
+        mode->radiated_real = -mode->radiated_real;
+        mode->radiated_imaginary = -mode->radiated_imaginary;
+      }
     }
   }
 }
@@ -4394,6 +4424,9 @@ static void wg_violin_body_current_output(const WG_VIOLIN_STATE *state,
     const WG_VIOLIN_BODY_MODE_STATE *mode = &state->body_modes[mode_index];
     const double radiated =
         mode->active && (mode_index == WG_VIOLIN_BODY_MODE_430_HZ ||
+            mode_index == WG_VIOLIN_BODY_MODE_1033_HZ ||
+            mode_index == WG_VIOLIN_BODY_MODE_1079_HZ ||
+            mode_index == WG_VIOLIN_BODY_MODE_1097_HZ ||
             mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ)
             ? mode->radiated_real * mode->real +
                 mode->radiated_imaginary * mode->imaginary
@@ -5935,6 +5968,7 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
       wg_violin_bound_string_profile(string);
   const double nut_loss_fraction = string_profile->nut_loss_fraction;
   double desired_delay;
+  double finger_vibrato_delay = 0.0;
   double desired_velocity;
   double delay_step;
   double delay_error;
@@ -5972,6 +6006,12 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   }
   desired_delay = wg_violin_clamp(
       desired_delay, 2.0, (double)string->rail_size - 2.0);
+  if (desired_delay != string->target_delay &&
+      string->finger_target_position > WG_VIOLIN_FINGER_STOP_EPSILON &&
+      string->harmonic == 0U && string->articulation <
+          WG_VIOLIN_ARTICULATION_PIZZICATO) {
+    finger_vibrato_delay = desired_delay - string->target_delay;
+  }
   if (string->vibrato_rate_hz > 0.0) {
     string->vibrato_phase += string->vibrato_rate_hz / sample_rate;
     string->vibrato_phase -= floor(string->vibrato_phase);
@@ -6080,6 +6120,22 @@ static double wg_violin_waveguide_step(WG_VIOLIN_STRING_STATE *string,
   wg_violin_split_delay(
       string->delay, string->bow_position,
       &string->bridge_delay, &string->nut_delay);
+  if (finger_vibrato_delay != 0.0 || string->vibrato_delay_offset != 0.0) {
+    /* A rolling finger moves the stop while the bridge stays put. */
+    string->vibrato_delay_offset = wg_violin_smooth(
+        string->vibrato_delay_offset, finger_vibrato_delay,
+        string->delay_velocity_smoothing);
+    if (finger_vibrato_delay == 0.0 &&
+        fabs(string->vibrato_delay_offset) < 1.0e-12) {
+      string->vibrato_delay_offset = 0.0;
+    }
+    string->bridge_delay = wg_violin_clamp(
+        string->bridge_delay -
+            string->bow_position * string->vibrato_delay_offset,
+        WG_VIOLIN_MIN_BRANCH_DELAY,
+        string->delay - WG_VIOLIN_MIN_BRANCH_DELAY);
+    string->nut_delay = string->delay - string->bridge_delay;
+  }
   wg_violin_split_delay(
       string->target_delay, string->bow_position_target,
       &string->target_bridge_delay, &string->target_nut_delay);
@@ -6420,6 +6476,7 @@ static void wg_violin_advance_string_gap(WG_VIOLIN_STRING_STATE *string,
       string->harmonic_touch_target = string->harmonic_touch_pressure;
       string->harmonic_projection_input = 0.0;
       string->harmonic_projection_output = 0.0;
+      string->vibrato_delay_offset = 0.0;
       wg_violin_split_delay(
           string->delay, string->bow_position,
           &string->bridge_delay, &string->nut_delay);
@@ -8542,6 +8599,7 @@ static int32_t wg_violin_test_waveguide_init(
         &phase);
   }
   if (!isfinite(string->delay) || !isfinite(string->target_delay) ||
+      !isfinite(string->vibrato_delay_offset) ||
       !isfinite(string->target_frequency) || !isfinite(loop_phase) ||
       !isfinite(nut_energy) || !isfinite(bridge_energy) ||
       !isfinite(nut_signature) || !isfinite(bridge_signature) ||

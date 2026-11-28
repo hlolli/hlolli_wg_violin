@@ -18,7 +18,7 @@ State = Tuple[float, ...]
 ModeKey = Tuple[int, int]
 
 SAMPLE_RATE = 48000
-MODE_COUNT = 12
+MODE_COUNT = 17
 OUTPUT_LIMIT = 4.0
 
 BODY_FIELDS = (
@@ -54,12 +54,17 @@ MODE_SPECS = (
     (430.0, 20.0, 0.3981, 0.08),
     (550.0, 30.0, 0.7079, -0.16),
     (665.0, 30.0, 1.0000, 0.16),
-    (820.0, 55.0, 0.5200, -0.22),
-    (1040.0, 80.0, 0.4000, 0.22),
+    (810.0, 42.0, 0.5200, -0.22),
+    (878.0, 16.0, 0.14, -0.22),
+    (1033.0, 64.0, 0.4000, 0.22),
+    (1078.658949, 27.420699, 0.177452, 0.18),
+    (1096.887273, 4.915355, 0.051527, -0.12),
     (1320.0, 120.0, 0.3400, -0.26),
     (1710.0, 180.0, 0.3100, 0.26),
-    (2350.0, 285.6, 1.1625, -0.30),
-    (3200.0, 325.0, 1.08, 0.30),
+    (1968.33208694, 14.18034666, 0.16857919, -0.14),
+    (1985.26973931, 8.37242926, 0.68557468, 0.20),
+    (2320.0, 318.0, 1.1625, -0.30),
+    (3300.0, 240.0, 1.08, 0.30),
     (4010.0, 760.0, 0.1800, -0.24),
 )
 
@@ -420,6 +425,7 @@ def check_controls(
     states = {}
     modes = {}
     frames = {}
+    highest_mode = (1, MODE_COUNT)
     with tempfile.TemporaryDirectory(prefix="hlolli-body-controls-") as folder:
         temporary = Path(folder)
         for label, controls in settings.items():
@@ -427,14 +433,14 @@ def check_controls(
                            "TEST_END": 0.51, **controls}
             body, run_modes, _, rendered = run_case(
                 failures, label, csound, module, csd, definitions,
-                (1, 2, 3), ((1, 12),),
+                (1, 2, 3), (highest_mode,),
                 output=temporary / "{}.wav".format(label))
-            if 3 not in body or (1, 12) not in run_modes or rendered is None:
+            if 3 not in body or highest_mode not in run_modes or rendered is None:
                 continue
             check_body_common(failures, label, body[3])
-            check_mode_common(failures, label + " mode 12", run_modes[(1, 12)])
+            check_mode_common(failures, f"{label} mode {MODE_COUNT}", run_modes[highest_mode])
             states[label] = body[3]
-            modes[label] = run_modes[(1, 12)]
+            modes[label] = run_modes[highest_mode]
             frames[label] = rendered[1]
 
     if "body_low" in states and "body_high" in states:

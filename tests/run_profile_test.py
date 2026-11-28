@@ -30,7 +30,7 @@ BODY_FIELDS = (
     "processed_samples", "finite",
 )
 MODE_FIELDS = ("frequency", "bandwidth", "gain", "pan", "finite")
-MODE_COUNT = 12
+MODE_COUNT = 17
 
 
 @dataclass

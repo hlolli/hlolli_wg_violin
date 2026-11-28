@@ -164,7 +164,7 @@ endin
 
 instr ScheduleModes
   iMode = 1
-  while iMode <= 12 do
+  while iMode <= 17 do
     event_i "i", "ModeProbe", p4, 0.001, p5, iMode, p6
     iMode += 1
   od

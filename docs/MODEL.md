@@ -11,7 +11,7 @@ force into a hidden per-string lane. The force tap reads the bridge after
 one-way travel from the bow. The bow reads the round-trip reflection.
 
 The resonance opcode reads the four lanes from the prior Csound block. It
-drives twelve body modes and returns wet stereo sound. A separate force
+drives seventeen body modes and returns wet stereo sound. A separate force
 history carries string-to-string feedback across 128 samples or one engine
 block, whichever is longer. Both paths work in either opcode order.
 
@@ -110,20 +110,26 @@ The E string adds more loss through the first octave. Its open and shallow
 stopped notes have less of that extra loss. The extra loss also tapers away
 as the speaking length goes from one half to one quarter.
 The pitch solver includes the phase of the reflection.
+On ordinary bowed stops, vibrato moves the finger end of the speaking
+length while keeping the bow-to-bridge distance set by the bow control.
 
 The optional A4 constructor value retunes all pitch-linked state together.
 The score still has to send note frequencies in the same tuning.
 
 ## Body
 
-The body is a one-way bridge-force to radiation model. It has twelve complex
-modes from 265 Hz to 4.01 kHz. The 665 Hz, 820 Hz, 2.35 kHz, 3.2 kHz,
-and 4.01 kHz modes use separate input gains for each string. The E string
-drives the 665 Hz and 820 Hz modes less and the 4.01 kHz mode more. Fixed left
-and right gains give a stable stereo view.
-The 430 Hz, 3.2 kHz, and 4.01 kHz modes blend their sine output with a
-velocity projection. The 1.71 kHz body mode and 2.35 kHz bridge mode use the
-velocity term alone. The velocity term has zero response to steady force.
+The body is a one-way bridge-force to radiation model. It has seventeen complex
+modes from 265 Hz to 4.01 kHz. Fourteen modes use separate input gains for each
+string. The G string drives the 430 Hz, 810 Hz, 878 Hz, both modes near 1.1 kHz,
+and the modes at 1.71 kHz and near 2 kHz more. It drives the 665 Hz and
+1.033 kHz modes less.
+The E string drives the 665 Hz and 810 Hz modes less and the 3.3 kHz and
+4.01 kHz modes more. Fixed left and right gains give a stable stereo view.
+The 430 Hz, 1.033 kHz, 3.3 kHz, and 4.01 kHz modes, and the pairs near
+1.1 kHz and 2 kHz, blend sine output with a velocity projection. The
+lower of the two modes near 2 kHz radiates in opposite polarity. The
+1.71 kHz and 2.32 kHz modes use the velocity term alone, which has
+zero response to steady force.
 Mode phase, smoothed gain, and decay live on the handle.
 
 `kBody` changes wet amount, tone, and decay. `kMute` lowers and darkens the

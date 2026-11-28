@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Retune the body modes near 2 kHz to restore upper harmonic movement through vibrato.
+- Rebalance body radiation near 2 kHz to soften the eighth harmonic on stopped G-string notes.
+- Retune the body mode near 2 kHz to strengthen the ninth harmonic across small tuning changes.
+- Narrow and strengthen the body mode near 2 kHz to bring out the ninth harmonic of stopped G-string notes.
+- Add a weak G-driven body mode near 2 kHz to bring out upper harmonics.
+- Widen and lower the bridge mode near 2.3 kHz and ease its drive from the G string.
+- Refine the body modes near 1.1 kHz for steadier fifth-harmonic timing as tuning changes.
+- Retune the two body modes near 1.1 kHz to keep harmonic peak timing steadier across small tuning changes.
+- Use two body modes near 1.1 kHz to keep harmonic movement steadier across small tuning changes.
+- Add a weak G-driven body mode near 1.1 kHz that changes when upper harmonics peak during vibrato.
+- Narrow the 1.033 kHz body mode and reduce its velocity share to bring out harmonic movement during vibrato.
+- Add a velocity component to the body mode near 1 kHz and rebalance nearby G-string coupling.
+- Rebalance how the G string drives the 878 Hz and 1.04 kHz body modes.
+- Add a weak 878 Hz body mode with a stronger response to the G string.
+- Move the 820 Hz body mode to 810 Hz and narrow it slightly.
+- Narrow the 820 Hz body mode and let the G string drive it a little more.
+- Rebalance the 430 Hz and 665 Hz body response on the G string.
+- Let the G string drive the 430 Hz and 1.71 kHz body modes more.
+- Keep the bow-to-bridge distance steady during stopped-string vibrato.
+- Increase the E string’s contribution to the 4.01 kHz body mode.
+- Narrow the upper body mode near 3.3 kHz and let the E string drive it more.
+- Give the 4.01 kHz body mode a larger velocity contribution.
 - Strengthen and narrow the 4.01 kHz body response on the E string.
 - Reduce E-string coupling to the 820 Hz body mode.
 - Add light bow-hair texture to slow strokes at shallow E-string stops.
