@@ -48,7 +48,8 @@
 #define WG_VIOLIN_BODY_MODES 12U
 #define WG_VIOLIN_BODY_MODE_430_HZ 2U
 #define WG_VIOLIN_BODY_MODE_1710_HZ 8U
-#define WG_VIOLIN_BRIDGE_HILL_MODE 9U
+#define WG_VIOLIN_BODY_MODE_3200_HZ 10U
+#define WG_VIOLIN_BODY_MODE_4010_HZ 11U
 #define WG_VIOLIN_BODY_DRIVE_LIMIT 8.0
 #define WG_VIOLIN_BODY_STATE_LIMIT 64.0
 #define WG_VIOLIN_BODY_OUTPUT_LIMIT 4.0
@@ -378,7 +379,7 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
     .id = "generic_violin",
     .display_name = "Generic Violin",
     .source_sha256 =
-        "d9ef7c81d6710d1e953974f8c0af014147be09d76965fe9d9196a09f0663be84",
+        "69607c20b215bee7eabefced24bc62f57af3dabccc5bb364f6c915160697fef4",
     .strings = {
         {0.55, 0.25, 20000.0, 5386.995271806526, 0.25, 1.32},
         {0.42, 0.25, 4200.0, 6056.378022952718, 0.25, 1.35},
@@ -443,14 +444,14 @@ static const WG_VIOLIN_PROFILE wg_profile_generic_violin = {
             {395.0, 25.0, 0.2818, -0.10, {1.0, 1.0, 1.0, 1.0}},
             {430.0, 20.0, 0.3981, 0.08, {1.0, 1.0, 1.0, 1.0}},
             {550.0, 30.0, 0.7079, -0.16, {1.0, 1.0, 1.0, 1.0}},
-            {665.0, 30.0, 1.0000, 0.16, {1.0, 1.0, 1.0, 1.0}},
-            {820.0, 55.0, 0.5200, -0.22, {1.0, 1.0, 1.0, 1.0}},
+            {665.0, 30.0, 1.0000, 0.16, {1.0, 1.0, 1.0, 0.72}},
+            {820.0, 55.0, 0.5200, -0.22, {1.0, 1.0, 0.3, 0.68}},
             {1040.0, 80.0, 0.30000000000000004, 0.22, {1.0, 1.0, 1.0, 1.0}},
             {1320.0, 120.0, 0.255, -0.26, {1.0, 1.0, 1.0, 1.0}},
             {1710.0, 180.0, 0.3100, 0.26, {1.0, 1.0, 1.0, 1.0}},
-            {2350.0, 285.6, 1.1625, -0.30, {1.0, 1.0, 1.0, 1.0}},
+            {2350.0, 285.6, 1.1625, -0.30, {1.0, 1.0, 1.0, 1.65}},
             {3200.0, 325.0, 1.08, 0.30, {0.659850, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001}},
-            {4350.0, 1100.0, 0.486, -0.24, {0.4629629629629629, 0.9259259259259258, 1.0, 1.111111111111111}},
+            {4010.0, 760.0, 0.7776, -0.24, {0.2893518518518518, 0.5787037037037036, 0.625, 3.85}},
         },
     },
 };
@@ -3289,9 +3290,24 @@ static void wg_violin_prepare_gesture(
   string->gesture_force_target = force;
   string->gesture_speed_target = speed;
   string->gesture_position_target = position;
-  string->bow_contact_attack_smoothing = soft_detache > 0.0
+  double contact_attack_extra = 0.0008 * soft_detache;
+  if (articulation == WG_VIOLIN_ARTICULATION_ARCO &&
+      string->harmonic == 0U && string->strange == 0.0 &&
+      string->finger_target_position <= WG_VIOLIN_FINGER_STOP_EPSILON) {
+    if (string->string_index == 2U) {
+      contact_attack_extra = 0.005 * (1.0 - wg_violin_smooth_step(
+          (fabs(speed) - 0.28) / 0.06));
+    } else if (string->string_index == 3U) {
+      const double slow = 1.0 - wg_violin_smooth_step(
+          (fabs(speed) - 0.10) / 0.10);
+      const double light = 1.0 - wg_violin_smooth_step(
+          (force - 0.36) / 0.12);
+      contact_attack_extra = 0.0015 * slow * light;
+    }
+  }
+  string->bow_contact_attack_smoothing = contact_attack_extra > 0.0
       ? wg_violin_smoothing_coefficient(
-            0.0015 + 0.0008 * soft_detache, sample_rate)
+            0.0015 + contact_attack_extra, sample_rate)
       : string->bow_contact_default_attack_smoothing;
   string->gesture_initialized = 1;
   if (active) {
@@ -4327,13 +4343,14 @@ static void wg_violin_prepare_body(WG_VIOLIN_STATE *state)
       mode->target_gain = 0.0;
     }
     if (mode->active && (mode_index == WG_VIOLIN_BODY_MODE_430_HZ ||
-        (mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ &&
-         mode_index <= WG_VIOLIN_BRIDGE_HILL_MODE + 1U))) {
+        mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ)) {
       const double half_cosine = sqrt(0.5 * (1.0 + mode->cosine));
       double velocity_share =
           mode_index == WG_VIOLIN_BODY_MODE_430_HZ ? 0.75 : 1.0;
-      if (mode_index == WG_VIOLIN_BRIDGE_HILL_MODE + 1U) {
+      if (mode_index == WG_VIOLIN_BODY_MODE_3200_HZ) {
         velocity_share = 0.88;
+      } else if (mode_index == WG_VIOLIN_BODY_MODE_4010_HZ) {
+        velocity_share = 0.46;
       }
 
       /* Match the velocity term to the sine response at the mode frequency. */
@@ -4377,8 +4394,7 @@ static void wg_violin_body_current_output(const WG_VIOLIN_STATE *state,
     const WG_VIOLIN_BODY_MODE_STATE *mode = &state->body_modes[mode_index];
     const double radiated =
         mode->active && (mode_index == WG_VIOLIN_BODY_MODE_430_HZ ||
-            (mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ &&
-             mode_index <= WG_VIOLIN_BRIDGE_HILL_MODE + 1U))
+            mode_index >= WG_VIOLIN_BODY_MODE_1710_HZ)
             ? mode->radiated_real * mode->real +
                 mode->radiated_imaginary * mode->imaginary
             : mode->imaginary;
@@ -4777,15 +4793,25 @@ static void wg_violin_hair_tick(WG_VIOLIN_STRING_STATE *string,
       !string->gesture_bow_change_active &&
       string->articulation == WG_VIOLIN_ARTICULATION_ARCO &&
       string->finger_pressure > 0.95 &&
-      string->string_index < 2U && string->harmonic_filter_order == 0U &&
-      string->strange == 0.0) {
-    const int32_t stopped_d = string->string_index == 1U;
-    /* Ease the G-string variation as the vibrating length shortens. */
+      (string->string_index < 2U ||
+       (string->string_index == 3U && string->finger_position < 0.50 &&
+        fabs(string->gesture_speed_target) < 0.18)) &&
+      string->harmonic_filter_order == 0U && string->strange == 0.0) {
+    const int32_t stopped_g = string->string_index == 0U;
     const double speaking_length = 1.0 - string->finger_position;
-    const double grain =
-        stopped_d ? 0.22 : 0.35 * speaking_length * speaking_length;
+    double grain =
+        stopped_g ? 0.35 * speaking_length * speaking_length : 0.22;
+    if (string->string_index == 3U) {
+      const double shallow =
+          1.0 - wg_violin_smooth_step(string->finger_position / 0.50);
+      const double slow = 1.0 - wg_violin_smooth_step(
+          (fabs(string->gesture_speed_target) - 0.14) / 0.04);
+      const double stopped = wg_violin_smooth_step(
+          string->finger_position / 0.16);
+      grain = 0.10 * stopped * shallow * slow;
+    }
     const double settled = wg_violin_smooth_step(
-        (string->bow_pressure_contact_age - (stopped_d ? 0.12 : 0.16)) / 0.08);
+        (string->bow_pressure_contact_age - (stopped_g ? 0.16 : 0.12)) / 0.08);
     surface_speed += grain * settled * string->bow_contact *
         string->bow_speed * string->mechanical_noise;
   }

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Strengthen and narrow the 4.01 kHz body response on the E string.
+- Reduce E-string coupling to the 820 Hz body mode.
+- Add light bow-hair texture to slow strokes at shallow E-string stops.
+- Ease in bow contact on light, slow open E-string strokes.
+- Reduce E-string coupling to the 665 Hz body mode.
+- Blend displacement and velocity in the highest body mode.
+- Let the E string drive the 2.35 kHz bridge mode more strongly.
+- Ease in bow contact on slow open A-string strokes.
+- Reduce the A string’s coupling to the 820 Hz body mode.
 - Strengthen and narrow radiation from the 2.35 kHz bridge mode.
 - Add bow hair texture to settled strokes on the stopped G string.
 - Use velocity radiation for the 1.71 kHz body mode and restore its gain.

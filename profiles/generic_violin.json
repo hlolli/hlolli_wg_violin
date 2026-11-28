@@ -206,19 +206,28 @@
       { "frequency_hz": 395.0, "bandwidth_hz": 25.0, "gain": 0.2818, "pan": -0.10 },
       { "frequency_hz": 430.0, "bandwidth_hz": 20.0, "gain": 0.3981, "pan": 0.08 },
       { "frequency_hz": 550.0, "bandwidth_hz": 30.0, "gain": 0.7079, "pan": -0.16 },
-      { "frequency_hz": 665.0, "bandwidth_hz": 30.0, "gain": 1.0000, "pan": 0.16 },
-      { "frequency_hz": 820.0, "bandwidth_hz": 55.0, "gain": 0.5200, "pan": -0.22 },
+      {
+        "frequency_hz": 665.0, "bandwidth_hz": 30.0, "gain": 1.0000, "pan": 0.16,
+        "source_gains": [1.0, 1.0, 1.0, 0.72]
+      },
+      {
+        "frequency_hz": 820.0, "bandwidth_hz": 55.0, "gain": 0.5200, "pan": -0.22,
+        "source_gains": [1.0, 1.0, 0.3, 0.68]
+      },
       { "frequency_hz": 1040.0, "bandwidth_hz": 80.0, "gain": 0.30000000000000004, "pan": 0.22 },
       { "frequency_hz": 1320.0, "bandwidth_hz": 120.0, "gain": 0.255, "pan": -0.26 },
       { "frequency_hz": 1710.0, "bandwidth_hz": 180.0, "gain": 0.3100, "pan": 0.26 },
-      { "frequency_hz": 2350.0, "bandwidth_hz": 285.6, "gain": 1.1625, "pan": -0.30 },
+      {
+        "frequency_hz": 2350.0, "bandwidth_hz": 285.6, "gain": 1.1625, "pan": -0.30,
+        "source_gains": [1.0, 1.0, 1.0, 1.65]
+      },
       {
         "frequency_hz": 3200.0, "bandwidth_hz": 325.0, "gain": 1.08, "pan": 0.30,
         "source_gains": [0.659850, 0.7000000000000001, 0.6541666666666667, 0.7000000000000001]
       },
       {
-        "frequency_hz": 4350.0, "bandwidth_hz": 1100.0, "gain": 0.486, "pan": -0.24,
-        "source_gains": [0.4629629629629629, 0.9259259259259258, 1.0, 1.111111111111111]
+        "frequency_hz": 4010.0, "bandwidth_hz": 760.0, "gain": 0.7776, "pan": -0.24,
+        "source_gains": [0.2893518518518518, 0.5787037037037036, 0.625, 3.85]
       }
     ]
   }

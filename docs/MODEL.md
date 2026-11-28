@@ -59,12 +59,16 @@ stick-slip calculation and propagation delay. The second edge refines its
 sliding force using the slip left after the string responds on ordinary notes.
 A small contact-memory term, a heat state, and spring-damper hair motion add
 history. Force, signed speed, and position remain live at k-rate.
-On a stopped G or D string under a settled arco stroke, a small variation in
-hair speed carries bow texture into the contact solver. On G, the variation
-tapers as the vibrating length shortens.
+On a stopped G, D or E string under a settled arco stroke, a small variation
+in hair speed carries bow texture into the contact solver. On G, the variation
+tapers as the vibrating length shortens. On E, it builds as the finger moves
+away from the nut, then tapers as the stop approaches an octave above the open
+string. Faster strokes also reduce it.
 The rosin memory uses an implicit step during slip so it can relax toward
 its target without stepping past it.
 Light détaché strokes build bow contact more slowly as force drops.
+Slow arco strokes on the open A string also build contact more gradually.
+On the open E string, the contact rise slows for light, slow arco strokes.
 During an arco or détaché bow change, the contact dip follows the reversal
 of the smoothed bow speed.
 Arco and détaché bursts pass through a 6.5 kHz one-pole filter before they
@@ -113,10 +117,12 @@ The score still has to send note frequencies in the same tuning.
 ## Body
 
 The body is a one-way bridge-force to radiation model. It has twelve complex
-modes from 265 Hz to 4.35 kHz. The 3.2 and 4.35 kHz modes use separate input
-gains for each string. Fixed left and right gains give a stable stereo view.
-The 430 Hz and 3.2 kHz body modes blend their sine output with a velocity
-projection. The 1.71 kHz body mode and 2.35 kHz bridge mode use the
+modes from 265 Hz to 4.01 kHz. The 665 Hz, 820 Hz, 2.35 kHz, 3.2 kHz,
+and 4.01 kHz modes use separate input gains for each string. The E string
+drives the 665 Hz and 820 Hz modes less and the 4.01 kHz mode more. Fixed left
+and right gains give a stable stereo view.
+The 430 Hz, 3.2 kHz, and 4.01 kHz modes blend their sine output with a
+velocity projection. The 1.71 kHz body mode and 2.35 kHz bridge mode use the
 velocity term alone. The velocity term has zero response to steady force.
 Mode phase, smoothed gain, and decay live on the handle.
 
